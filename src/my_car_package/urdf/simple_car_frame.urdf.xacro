@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<robot name="my_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="mesh_x" value="-0.21"/>
+  <xacro:property name="mesh_y" value="0.2625"/>
+  <xacro:property name="mesh_z" value="0.0"/>
+  <xacro:property name="mesh_roll" value="0.0"/>
+  <xacro:property name="mesh_pitch" value="0.0"/>
+  <xacro:property name="mesh_yaw" value="-1.5708"/>  
+
+  <material name="gray">
+    <color rgba="0.55 0.55 0.55 1"/>
+  </material>
+
+  <!-- 차체 기준 프레임 -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="${mesh_x} ${mesh_y} ${mesh_z}" rpy="${mesh_roll} ${mesh_pitch} ${mesh_yaw}"/>
+      <geometry>
+        <mesh filename="package://my_car_package/meshes/simple_car_frame.stl"
+              scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="gray"/>
+    </visual>
+  </link>
+
+  <!-- LiDAR 프레임 -->
+  <link name="laser_frame"/>
+
+  <joint name="base_to_lidar" type="fixed">
+    <parent link="base_link"/>
+    <child link="laser_frame"/>
+    <origin xyz="0.0 0.0 0.30335" rpy="3.1416 0 0"/>
+  </joint>
+
+  <!-- T265 프레임 -->
+  <link name="camera_link"/>
+
+  <joint name="base_to_t265" type="fixed">
+    <parent link="camera_link"/>
+    <child link="base_link"/>
+    <origin xyz="-0.1825 0.0 -0.152" rpy="0.0 0.0 0.0"/>
+  </joint>
+
+</robot>
