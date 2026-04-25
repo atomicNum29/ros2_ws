@@ -1,0 +1,46 @@
+slam_toolbox:
+  ros__parameters:
+    # Frames
+    map_frame: map
+    odom_frame: odom_frame
+    base_frame: base_link
+    scan_topic: /scan
+    mode: mapping
+
+    # Timing
+    use_sim_time: true
+    transform_timeout: 0.5 #0.2
+    tf_buffer_duration: 6000.0 #30.0
+
+    # Mapping
+    resolution: 0.01
+    map_update_interval: 3.0
+    max_laser_range: 50.0
+    minimum_time_interval: 0.0
+    transform_publish_period: 0.05
+
+    # scan matching
+    throttle_scans: 1
+    minimum_travel_distance: 0.1 #0.1
+    minimum_travel_heading: 0.15 #0.1
+    use_scan_matching: true
+    use_scan_barycenter: true
+
+    angle_variance_penalty: 0.3
+    #distance_variance_penalty: 0.1
+    fine_search_angle_offset: 0.002
+
+    correlation_search_space_dimension: 0.1
+    correlation_search_space_resolution: 0.01
+    correlation_search_space_smear_deviation: 0.01
+
+    # Solver / loop closure
+    do_loop_closing: true
+    loop_search_maximum_distance: 5.0
+    loop_search_space_dimension: 5.0
+    loop_search_space_resolution: 0.02
+    loop_search_space_smear_deviation: 0.01
+    loop_match_minimum_chain_size: 5
+    loop_match_minimum_response_fine: 0.2
+
+

@@ -1,9 +1,15 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    IncludeLaunchDescription,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
@@ -38,13 +44,19 @@ def generate_launch_description():
     # )
 
     # 4. RViz2 실행 (선택 사항)
+    # use_rviz 매개변수를 통해 RViz2 실행 여부를 제어할 수 있도록 수정
+    use_rviz_arg = DeclareLaunchArgument(
+        "use_rviz", default_value="false", description="Whether to launch RViz2"
+    )
+    use_rviz = LaunchConfiguration("use_rviz")
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
         parameters=[{"use_sim_time": True}],
         output="screen",
+        condition=IfCondition(use_rviz),
     )
 
     return LaunchDescription(
-        [robot_description_launch, static_tf_node, rviz_node]
+        [robot_description_launch, static_tf_node, rviz_node, use_rviz_arg]
     )

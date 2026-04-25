@@ -30,7 +30,7 @@
   <joint name="base_to_lidar" type="fixed">
     <parent link="base_link"/>
     <child link="laser_frame"/>
-    <origin xyz="0.0 0.0 0.30335" rpy="3.1416 0 0"/>
+    <origin xyz="0.0 -0.0531 0.33635" rpy="3.1416 0 0"/>
   </joint>
 
   <!-- T265 프레임 -->
