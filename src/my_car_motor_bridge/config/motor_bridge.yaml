@@ -1,0 +1,11 @@
+motor_bridge_node:
+  ros__parameters:
+    port: "/dev/ttyACM0"
+    baudrate: 115200
+    max_linear_x: 0.5
+    max_angular_z: 1.5
+    send_rate_hz: 50.0
+    read_rate_hz: 100.0
+    cmd_timeout_sec: 0.3
+    enable_on_start: true
+    send_zero_when_timeout: true
