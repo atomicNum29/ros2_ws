@@ -148,11 +148,11 @@ Recommended uv setup:
 
     cd src/my_car_web_monitor
     # Run this from a shell where your ROS2 distribution has already been sourced.
-    uv venv --python python3 --system-site-packages
+    uv venv --python /usr/bin/python3 --system-site-packages
     source .venv/bin/activate
     uv sync --active
 
-The --python python3 and --system-site-packages options are both intentional. ROS2 Python modules such as rclpy, geometry_msgs, and std_msgs are normally installed by the ROS distribution for the system Python ABI. The local uv venv must use that same Python interpreter and must have visibility into those ROS packages, while keeping the web/media packages isolated from the global environment. Do not let uv create this venv with a managed Python such as Python 3.14, because rclpy binary extensions will not match that ABI.
+The --python /usr/bin/python3 and --system-site-packages options are both intentional. ROS2 Python modules such as rclpy, geometry_msgs, and std_msgs are normally installed by the ROS distribution for the system Python ABI. The local uv venv must use that same Python interpreter and must have visibility into those ROS packages, while keeping the web/media packages isolated from the global environment. Do not let uv create this venv with a managed Python such as Python 3.14, because rclpy binary extensions will not match that ABI.
 
 Build and run from the workspace with the same activated uv venv and sourced ROS2 environment:
 
