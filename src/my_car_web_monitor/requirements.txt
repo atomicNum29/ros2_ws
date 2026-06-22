@@ -1,7 +1,0 @@
-aiortc>=1.9.0
-av>=12.3.0
-fastapi>=0.115.0
-numpy>=2.1.0
-pillow>=11.1.0
-uvicorn>=0.32.0
-

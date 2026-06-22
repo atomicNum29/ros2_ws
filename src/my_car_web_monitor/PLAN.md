@@ -45,7 +45,7 @@ Deliverables:
 
 Acceptance criteria:
 
-- `colcon build --packages-select my_car_web_monitor` succeeds.
+- `python -m colcon build --packages-select my_car_web_monitor` succeeds.
 - `ros2 run my_car_web_monitor web_monitor_node` starts a web server.
 - Browser can open the landing UI.
 
@@ -185,5 +185,5 @@ Acceptance criteria:
 
 ## Immediate Next Step
 
-Run colcon build --packages-select my_car_web_monitor in a ROS2 shell, then test with CAMERA_SOURCE=synthetic ros2 run my_car_web_monitor web_monitor_node.
+Create the uv venv with uv venv --python python3 --system-site-packages from a ROS-sourced shell so it matches the ROS Python ABI, run uv sync --active, then run python -m colcon build --packages-select my_car_web_monitor and test with CAMERA_SOURCE=synthetic ros2 run my_car_web_monitor web_monitor_node.
 

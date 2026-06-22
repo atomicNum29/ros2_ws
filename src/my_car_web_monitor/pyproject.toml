@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my_car_web_monitor"
+version = "0.1.0"
+description = "Browser camera monitoring and ROS2 teleoperation bridge for my_car."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+maintainers = [{ name = "Bak siu", email = "atomicw63.546@gmail.com" }]
+dependencies = [
+    "aiortc>=1.9.0",
+    "av>=12.3.0",
+    "fastapi>=0.115.0",
+    "numpy>=2.1.0",
+    "pillow>=11.1.0",
+    "pydantic>=2.9.0",
+    "uvicorn>=0.32.0",
+]
+
+
+[project.scripts]
+web_monitor_node = "my_car_web_monitor.web_monitor_node:main"

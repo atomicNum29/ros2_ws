@@ -138,17 +138,40 @@ Expected ROS parameters or environment-backed settings:
 
 ## Runtime Dependencies
 
-This package needs both ROS2 Python modules and web streaming Python modules at runtime. A successful colcon build does not automatically prove those modules are installed in the shell that runs ros2 run.
+This package needs both ROS2 Python modules and web streaming Python modules at runtime. A successful colcon build does not automatically prove those modules are available in the shell that runs ros2 run.
 
-Required ROS-side modules are provided by a sourced ROS2 environment: rclpy, geometry_msgs, and std_msgs.
+ROS-side modules are provided by a sourced ROS2 environment: rclpy, geometry_msgs, and std_msgs. Web/media Python dependencies are declared in pyproject.toml and are installed with uv sync.
 
-Required web/media Python modules are listed in requirements.txt: fastapi, uvicorn, aiortc, av, numpy, and pillow.
+Do not install web/media dependencies into the global system Python. On modern Ubuntu and Raspberry Pi OS systems, global pip installs are commonly blocked by PEP 668 and should be avoided anyway.
 
-Install example for the active Python environment:
+Recommended uv setup:
 
-    python3 -m pip install -r src/my_car_web_monitor/requirements.txt
+    cd src/my_car_web_monitor
+    # Run this from a shell where your ROS2 distribution has already been sourced.
+    uv venv --python python3 --system-site-packages
+    source .venv/bin/activate
+    uv sync --active
 
-Raspberry Pi Camera direct mode also needs Picamera2 from the Raspberry Pi OS/system camera stack. It is intentionally not listed in pip requirements because it is normally installed as a system package on Raspberry Pi.
+The --python python3 and --system-site-packages options are both intentional. ROS2 Python modules such as rclpy, geometry_msgs, and std_msgs are normally installed by the ROS distribution for the system Python ABI. The local uv venv must use that same Python interpreter and must have visibility into those ROS packages, while keeping the web/media packages isolated from the global environment. Do not let uv create this venv with a managed Python such as Python 3.14, because rclpy binary extensions will not match that ABI.
+
+Build and run from the workspace with the same activated uv venv and sourced ROS2 environment:
+
+    cd ../..
+    python -m colcon build --packages-select my_car_web_monitor
+    source install/setup.bash
+    CAMERA_SOURCE=synthetic ros2 run my_car_web_monitor web_monitor_node
+
+Use python -m colcon, not plain colcon, when relying on the uv venv. The generated ROS console script records the Python interpreter used during the build. If plain colcon resolves outside the active venv, the installed script can end up with a system Python shebang and then fail to import modules installed in .venv, such as uvicorn.
+
+A quick check after rebuilding:
+
+    head -1 install/my_car_web_monitor/lib/my_car_web_monitor/web_monitor_node
+
+The first line should point at the uv venv Python, not a system Python outside the venv.
+
+If rclpy fails with a message mentioning a path like _rclpy_pybind11.cpython-314-*.so, the uv venv was created with the wrong Python version. Recreate the venv with uv venv --python python3 --system-site-packages, then rebuild this package with python -m colcon build.
+
+Raspberry Pi Camera direct mode also needs Picamera2 from the Raspberry Pi OS/system camera stack. It is intentionally not declared as a PyPI dependency because it is normally installed as a system package on Raspberry Pi.
 
 ## Development Notes
 
