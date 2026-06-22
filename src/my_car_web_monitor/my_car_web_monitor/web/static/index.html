@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>my_car_web_monitor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #101114;
+        --panel: #1a1d22;
+        --panel-2: #20242b;
+        --text: #eef0f4;
+        --muted: #a5adba;
+        --line: #333945;
+        --accent: #39b980;
+        --danger: #f05252;
+        --warn: #eab308;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(1280px, 100%);
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: end;
+        margin-bottom: 16px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 1.35rem;
+        font-weight: 720;
+      }
+
+      h2 {
+        font-size: 1rem;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 16px;
+        align-items: start;
+      }
+
+      .panel,
+      .stream-card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      .panel {
+        padding: 14px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .stream-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 14px;
+      }
+
+      .stream-card {
+        overflow: hidden;
+      }
+
+      .stream-video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        display: grid;
+        place-items: center;
+        background: #050608;
+      }
+
+      video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
+      }
+
+      .stream-info,
+      .stream-actions,
+      .status-list {
+        padding: 12px;
+      }
+
+      .stream-actions,
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .status-list {
+        display: grid;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        border-top: 1px solid var(--line);
+      }
+
+      button {
+        min-height: 38px;
+        padding: 0 13px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: var(--panel-2);
+        color: var(--text);
+        font: inherit;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: #596170;
+      }
+
+      button.primary {
+        background: var(--accent);
+        color: #052114;
+      }
+
+      button.danger {
+        background: var(--danger);
+        color: #fff;
+      }
+
+      .teleop-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin: 12px 0;
+      }
+
+      .teleop-grid button {
+        aspect-ratio: 1.25 / 1;
+        font-size: 1.08rem;
+      }
+
+      .span-3 {
+        grid-column: span 3;
+      }
+
+      .ok {
+        color: var(--accent);
+      }
+
+      .bad {
+        color: var(--danger);
+      }
+
+      .warn {
+        color: var(--warn);
+      }
+
+      @media (max-width: 860px) {
+        main {
+          padding: 12px;
+        }
+
+        header,
+        .layout {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>my_car_web_monitor</h1>
+          <p class="muted">Camera streams and ROS vehicle control</p>
+        </div>
+        <div id="health" class="muted">server: checking</div>
+      </header>
+
+      <div class="layout">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Streams</h2>
+            <div class="row">
+              <button id="start-all" class="primary">Start All</button>
+              <button id="stop-all">Stop All</button>
+            </div>
+          </div>
+          <div id="stream-grid" class="stream-grid"></div>
+          <p id="stream-error" class="bad"></p>
+        </section>
+
+        <aside class="panel">
+          <div class="panel-head">
+            <h2>Control</h2>
+            <div id="control-state" class="muted">idle</div>
+          </div>
+          <div class="row">
+            <button id="connect-control" class="primary">Connect</button>
+            <button id="disconnect-control">Disconnect</button>
+          </div>
+          <div class="teleop-grid">
+            <div></div>
+            <button data-command="forward">W</button>
+            <div></div>
+            <button data-command="left">A</button>
+            <button id="stop-control" class="danger">Stop</button>
+            <button data-command="right">D</button>
+            <div></div>
+            <button data-command="backward">S</button>
+            <div></div>
+          </div>
+          <div class="status-list">
+            <div id="cmd-status">cmd: linear=0.00 angular=0.00</div>
+            <div id="topic-status">topic: loading</div>
+            <div id="motor-status">motor: waiting</div>
+            <div id="control-error" class="bad"></div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <template id="stream-template">
+      <article class="stream-card">
+        <div class="stream-video"><video autoplay playsinline muted></video></div>
+        <div class="stream-info">
+          <strong class="stream-title"></strong>
+          <div class="stream-meta muted"></div>
+        </div>
+        <div class="stream-actions">
+          <button class="start-stream primary">Start</button>
+          <button class="stop-stream">Stop</button>
+        </div>
+        <div class="status-list">
+          <div class="connection-status">connection: idle</div>
+          <div class="ice-status">ice: idle</div>
+          <div class="stream-status">state: idle</div>
+          <div class="card-error bad"></div>
+        </div>
+      </article>
+    </template>
+
+    <script>
+      const streamGrid = document.getElementById("stream-grid");
+      const streamTemplate = document.getElementById("stream-template");
+      const streamError = document.getElementById("stream-error");
+      const health = document.getElementById("health");
+      const startAllButton = document.getElementById("start-all");
+      const stopAllButton = document.getElementById("stop-all");
+      const connectControlButton = document.getElementById("connect-control");
+      const disconnectControlButton = document.getElementById("disconnect-control");
+      const stopControlButton = document.getElementById("stop-control");
+      const controlState = document.getElementById("control-state");
+      const cmdStatus = document.getElementById("cmd-status");
+      const topicStatus = document.getElementById("topic-status");
+      const motorStatus = document.getElementById("motor-status");
+      const controlError = document.getElementById("control-error");
+
+      const streamCards = new Map();
+      const activeKeys = new Set();
+      const teleopState = { linearSpeed: 0.3, angularSpeed: 1.0 };
+      let controlSocket = null;
+      let controlTimer = null;
+
+      function setText(element, prefix, value, bad = false) {
+        element.textContent = `${prefix}: ${value}`;
+        element.classList.toggle("bad", bad);
+        element.classList.toggle("ok", !bad && value !== "idle" && value !== "waiting");
+      }
+
+      function controlVector() {
+        let linear = 0;
+        let angular = 0;
+        if (activeKeys.has("forward")) linear += teleopState.linearSpeed;
+        if (activeKeys.has("backward")) linear -= teleopState.linearSpeed;
+        if (activeKeys.has("left")) angular += teleopState.angularSpeed;
+        if (activeKeys.has("right")) angular -= teleopState.angularSpeed;
+        return { linear, angular };
+      }
+
+      function sendControlMessage(message) {
+        if (!controlSocket || controlSocket.readyState !== WebSocket.OPEN) return;
+        controlSocket.send(JSON.stringify(message));
+      }
+
+      function sendCurrentCommand() {
+        const { linear, angular } = controlVector();
+        cmdStatus.textContent = `cmd: linear=${linear.toFixed(2)} angular=${angular.toFixed(2)}`;
+        sendControlMessage({ type: "command", linear, angular });
+      }
+
+      function startControlLoop() {
+        stopControlLoop();
+        controlTimer = window.setInterval(sendCurrentCommand, 100);
+      }
+
+      function stopControlLoop() {
+        if (controlTimer) {
+          window.clearInterval(controlTimer);
+          controlTimer = null;
+        }
+      }
+
+      async function connectControl() {
+        if (controlSocket) return;
+        controlError.textContent = "";
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        controlSocket = new WebSocket(`${protocol}://${window.location.host}/ws/control`);
+        controlSocket.addEventListener("open", () => {
+          setText(controlState, "control", "connected");
+          startControlLoop();
+          sendControlMessage({ type: "status" });
+        });
+        controlSocket.addEventListener("message", (event) => {
+          const payload = JSON.parse(event.data);
+          if (payload.type === "error") {
+            controlError.textContent = payload.message;
+            return;
+          }
+          if (payload.type === "status") {
+            topicStatus.textContent = `topic: ${payload.cmd_vel_topic}`;
+            const status = payload.motor_status || payload.motor_status_raw || "waiting";
+            motorStatus.textContent = `motor: ${
+              typeof status === "string" ? status : JSON.stringify(status)
+            }`;
+          }
+        });
+        controlSocket.addEventListener("close", () => {
+          activeKeys.clear();
+          stopControlLoop();
+          controlSocket = null;
+          setText(controlState, "control", "idle");
+          cmdStatus.textContent = "cmd: linear=0.00 angular=0.00";
+        });
+        controlSocket.addEventListener("error", () => {
+          setText(controlState, "control", "error", true);
+        });
+      }
+
+      function disconnectControl() {
+        activeKeys.clear();
+        stopControlLoop();
+        sendControlMessage({ type: "stop" });
+        if (controlSocket) controlSocket.close();
+        controlSocket = null;
+        cmdStatus.textContent = "cmd: linear=0.00 angular=0.00";
+      }
+
+      function setCommandActive(command, active) {
+        if (active) activeKeys.add(command);
+        else activeKeys.delete(command);
+        sendCurrentCommand();
+      }
+
+      function createStreamCard(stream) {
+        const fragment = streamTemplate.content.cloneNode(true);
+        const video = fragment.querySelector("video");
+        const title = fragment.querySelector(".stream-title");
+        const meta = fragment.querySelector(".stream-meta");
+        const startButton = fragment.querySelector(".start-stream");
+        const stopButton = fragment.querySelector(".stop-stream");
+        const connectionStatus = fragment.querySelector(".connection-status");
+        const iceStatus = fragment.querySelector(".ice-status");
+        const streamStatus = fragment.querySelector(".stream-status");
+        const cardError = fragment.querySelector(".card-error");
+
+        title.textContent = stream.id;
+        meta.textContent = stream.device ? `${stream.source_type} (${stream.device})` : stream.source_type;
+
+        const card = {
+          stream,
+          video,
+          connectionStatus,
+          iceStatus,
+          streamStatus,
+          cardError,
+          peerConnection: null,
+        };
+
+        startButton.addEventListener("click", () => startStream(card));
+        stopButton.addEventListener("click", () => stopStream(card));
+        streamCards.set(stream.id, card);
+        streamGrid.appendChild(fragment);
+      }
+
+      async function loadStreams() {
+        const response = await fetch("/streams");
+        if (!response.ok) throw new Error(`stream discovery failed: ${response.status}`);
+        const payload = await response.json();
+        streamGrid.innerHTML = "";
+        streamCards.clear();
+        for (const stream of payload.streams || []) createStreamCard(stream);
+      }
+
+      async function loadControlConfig() {
+        const response = await fetch("/control/config");
+        if (!response.ok) throw new Error(`control config failed: ${response.status}`);
+        const payload = await response.json();
+        teleopState.linearSpeed = payload.linear_speed;
+        teleopState.angularSpeed = payload.angular_speed;
+      }
+
+      async function startStream(card) {
+        if (card.peerConnection) return;
+        card.cardError.textContent = "";
+        card.peerConnection = new RTCPeerConnection();
+        card.peerConnection.addTransceiver("video", { direction: "recvonly" });
+        card.peerConnection.ontrack = (event) => {
+          card.video.srcObject = event.streams[0];
+        };
+        card.peerConnection.onconnectionstatechange = () => {
+          setText(card.connectionStatus, "connection", card.peerConnection.connectionState);
+        };
+        card.peerConnection.oniceconnectionstatechange = () => {
+          setText(card.iceStatus, "ice", card.peerConnection.iceConnectionState);
+        };
+
+        try {
+          const offer = await card.peerConnection.createOffer();
+          await card.peerConnection.setLocalDescription(offer);
+          const response = await fetch("/offer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              stream_id: card.stream.id,
+              sdp: card.peerConnection.localDescription.sdp,
+              type: card.peerConnection.localDescription.type,
+            }),
+          });
+          if (!response.ok) throw new Error(`offer failed: ${response.status}`);
+          await card.peerConnection.setRemoteDescription(await response.json());
+          setText(card.streamStatus, "state", "streaming");
+        } catch (error) {
+          card.cardError.textContent = error.message;
+          await stopStream(card);
+        }
+      }
+
+      async function stopStream(card) {
+        if (card.peerConnection) {
+          card.peerConnection.getTransceivers().forEach((transceiver) => {
+            if (transceiver.stop) transceiver.stop();
+          });
+          card.peerConnection.close();
+          card.peerConnection = null;
+        }
+        card.video.srcObject = null;
+        setText(card.connectionStatus, "connection", "idle");
+        setText(card.iceStatus, "ice", "idle");
+        setText(card.streamStatus, "state", "idle");
+      }
+
+      async function startAllStreams() {
+        for (const card of streamCards.values()) await startStream(card);
+      }
+
+      async function stopAllStreams() {
+        for (const card of streamCards.values()) await stopStream(card);
+      }
+
+      const keyBindings = new Map([
+        ["w", "forward"],
+        ["arrowup", "forward"],
+        ["s", "backward"],
+        ["arrowdown", "backward"],
+        ["a", "left"],
+        ["arrowleft", "left"],
+        ["d", "right"],
+        ["arrowright", "right"],
+      ]);
+
+      document.querySelectorAll("[data-command]").forEach((button) => {
+        const command = button.dataset.command;
+        button.addEventListener("pointerdown", () => setCommandActive(command, true));
+        button.addEventListener("pointerup", () => setCommandActive(command, false));
+        button.addEventListener("pointerleave", () => setCommandActive(command, false));
+        button.addEventListener("pointercancel", () => setCommandActive(command, false));
+      });
+
+      window.addEventListener("keydown", (event) => {
+        const command = keyBindings.get(event.key.toLowerCase());
+        if (!command) return;
+        event.preventDefault();
+        setCommandActive(command, true);
+      });
+      window.addEventListener("keyup", (event) => {
+        const command = keyBindings.get(event.key.toLowerCase());
+        if (!command) return;
+        event.preventDefault();
+        setCommandActive(command, false);
+      });
+      window.addEventListener("blur", () => {
+        activeKeys.clear();
+        sendControlMessage({ type: "stop" });
+        cmdStatus.textContent = "cmd: linear=0.00 angular=0.00";
+      });
+      window.addEventListener("beforeunload", () => {
+        stopAllStreams();
+        disconnectControl();
+      });
+
+      startAllButton.addEventListener("click", startAllStreams);
+      stopAllButton.addEventListener("click", stopAllStreams);
+      connectControlButton.addEventListener("click", connectControl);
+      disconnectControlButton.addEventListener("click", disconnectControl);
+      stopControlButton.addEventListener("click", () => {
+        activeKeys.clear();
+        sendControlMessage({ type: "stop" });
+        cmdStatus.textContent = "cmd: linear=0.00 angular=0.00";
+      });
+
+      Promise.all([fetch("/health"), loadStreams(), loadControlConfig()])
+        .then(() => {
+          health.textContent = "server: ok";
+          health.classList.add("ok");
+        })
+        .catch((error) => {
+          health.textContent = "server: error";
+          streamError.textContent = error.message;
+        });
+    </script>
+  </body>
+</html>
+
