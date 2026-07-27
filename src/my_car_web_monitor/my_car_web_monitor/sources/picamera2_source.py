@@ -39,7 +39,7 @@ class Picamera2Source(FrameSource):
 
         def _start() -> None:
             config = self._camera.create_video_configuration(
-                main={"size": (self.width, self.height), "format": "RGB888"},
+                main={"size": (self.width, self.height), "format": "BGR888"},
                 controls={"FrameRate": self.fps},
             )
             self._camera.configure(config)
