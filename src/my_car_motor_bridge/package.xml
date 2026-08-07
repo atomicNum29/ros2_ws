@@ -3,7 +3,7 @@
 <package format="3">
   <name>my_car_motor_bridge</name>
   <version>0.1.0</version>
-  <description>ROS2 motor bridge that converts /cmd_vel to normalized MCU serial packets.</description>
+  <description>ROS2 motor bridge that converts /cmd_vel to milli-unit MCU serial packets.</description>
   <maintainer email="atomicw63.546@gmail.com">Bak siu</maintainer>
   <license>Apache-2.0</license>
 

@@ -14,15 +14,15 @@ PAYLOAD_LENGTH = 7
 PACKET_OVERHEAD = 4  # header(2) + length(1) + checksum(1)
 PACKET_LENGTH = PACKET_OVERHEAD + PAYLOAD_LENGTH
 
-COMMAND_MIN = -1000
-COMMAND_MAX = 1000
+COMMAND_MIN = -(2**15)
+COMMAND_MAX = 2**15 - 1
 
 FLAG_ENABLE = 0x01
 FLAG_EMERGENCY_STOP = 0x02
 
 
 def clamp_command(value: int) -> int:
-    """Clamp a normalized command to the supported MCU command range."""
+    """Clamp a command to the signed 16-bit packet field range."""
     return max(COMMAND_MIN, min(COMMAND_MAX, int(value)))
 
 

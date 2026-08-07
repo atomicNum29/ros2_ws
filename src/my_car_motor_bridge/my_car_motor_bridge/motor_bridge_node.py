@@ -1,4 +1,4 @@
-"""ROS2 node that bridges /cmd_vel to normalized MCU serial packets."""
+"""ROS2 node that bridges /cmd_vel to milli-unit MCU serial packets."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 from std_msgs.msg import String
 
-from my_car_motor_bridge.command_converter import normalize_cmd_vel
+from my_car_motor_bridge.command_converter import convert_cmd_vel
 from my_car_motor_bridge.protocol import MotorCommand, MotorStatus, try_parse_status
 from my_car_motor_bridge.serial_transport import SerialTransport
 
@@ -22,8 +22,6 @@ class MotorBridgeNode(Node):
 
         self.declare_parameter("port", "/dev/ttyACM0")
         self.declare_parameter("baudrate", 115200)
-        self.declare_parameter("max_linear_x", 0.5)
-        self.declare_parameter("max_angular_z", 1.5)
         self.declare_parameter("send_rate_hz", 50.0)
         self.declare_parameter("cmd_timeout_sec", 0.3)
         self.declare_parameter("enable_on_start", True)
@@ -33,12 +31,6 @@ class MotorBridgeNode(Node):
         self.port = self.get_parameter("port").get_parameter_value().string_value
         self.baudrate = (
             self.get_parameter("baudrate").get_parameter_value().integer_value
-        )
-        self.max_linear_x = (
-            self.get_parameter("max_linear_x").get_parameter_value().double_value
-        )
-        self.max_angular_z = (
-            self.get_parameter("max_angular_z").get_parameter_value().double_value
         )
         self.send_rate_hz = (
             self.get_parameter("send_rate_hz").get_parameter_value().double_value
@@ -126,11 +118,9 @@ class MotorBridgeNode(Node):
         if twist is None:
             return MotorCommand(seq=self._next_seq(), v_cmd=0, w_cmd=0, enable=False)
 
-        v_cmd, w_cmd = normalize_cmd_vel(
+        v_cmd, w_cmd = convert_cmd_vel(
             linear_x=float(twist.linear.x),
             angular_z=float(twist.angular.z),
-            max_linear_x=float(self.max_linear_x),
-            max_angular_z=float(self.max_angular_z),
         )
         return MotorCommand(
             seq=self._next_seq(),

@@ -2,7 +2,7 @@
 
 `my_car_motor_bridge` is a ROS2 Jazzy `ament_python` package that bridges ROS `/cmd_vel` commands to an MCU serial protocol for a 4WD skid-steer UGV.
 
-The ROS node does not implement vehicle kinematics, kick-start, minimum PWM, ramp limiting, per-wheel gain, or motor watchdog logic. It normalizes `/cmd_vel` into `v_cmd` and `w_cmd`, sends those values to the MCU, receives MCU status packets, and publishes status as ROS text.
+The ROS node does not implement vehicle kinematics, kick-start, minimum PWM, ramp limiting, per-wheel gain, or motor watchdog logic. It converts `/cmd_vel` into `v_cmd` in milli m/s and `w_cmd` in milli rad/s, sends those values to the MCU, receives MCU status packets, and publishes status as ROS text.
 
 ## Package Structure
 
@@ -31,7 +31,7 @@ my_car_motor_bridge/
 ROS node responsibilities:
 
 - Subscribe to `/cmd_vel`.
-- Convert `linear.x` and `angular.z` into normalized integer commands from `-1000` to `+1000`.
+- Convert `linear.x` from m/s to `v_cmd` in milli m/s and `angular.z` from rad/s to `w_cmd` in milli rad/s.
 - Send command packets to the MCU at a fixed rate.
 - Receive status packets from the MCU.
 - Publish parsed status to `~/status` as `std_msgs/msg/String`.
@@ -40,7 +40,7 @@ ROS node responsibilities:
 
 MCU responsibilities:
 
-- Convert normalized `v_cmd` and `w_cmd` into wheel-level commands.
+- Interpret `v_cmd` and `w_cmd` as actual velocity commands in milli m/s and milli rad/s, respectively, and convert them into wheel-level commands.
 - Implement skid-steer motor mixing.
 - Implement kick-start, ramp limiting, minimum PWM, per-wheel gain, and motor watchdog behavior.
 - Enforce low-level timeout and safety behavior.
@@ -58,12 +58,14 @@ All packets start with `0xAA 0x55`. The checksum is an XOR of every byte from by
 | 2 | length | uint8 | `7` |
 | 3 | type | uint8 | `0x01` |
 | 4 | seq | uint8 | Sequence counter |
-| 5-6 | v_cmd | int16 LE | Normalized linear command, `-1000` to `+1000` |
-| 7-8 | w_cmd | int16 LE | Normalized angular command, `-1000` to `+1000` |
+| 5-6 | v_cmd | int16 LE | Linear velocity in milli m/s (`linear.x` in m/s multiplied by `1000`) |
+| 7-8 | w_cmd | int16 LE | Angular velocity in milli rad/s (`angular.z` in rad/s multiplied by `1000`) |
 | 9 | flags | uint8 | bit 0: enable, bit 1: emergency_stop |
 | 10 | checksum | uint8 | XOR checksum |
 
 Payload is `type + seq + v_cmd + w_cmd + flags`, length `7`.
+
+`v_cmd` and `w_cmd` carry unit-scaled physical values, not values normalized to the range `-1000` to `+1000`. For example, `linear.x=0.1 m/s` is sent as `v_cmd=100`, and `angular.z=0.5 rad/s` is sent as `w_cmd=500`.
 
 ### Status Packet: MCU to ROS
 
@@ -87,8 +89,6 @@ Payload is `type + seq + state + error + battery_mv`, length `7`.
 | --- | --- | --- |
 | `port` | `/dev/ttyACM0` | Serial device path |
 | `baudrate` | `115200` | Serial baud rate |
-| `max_linear_x` | `0.5` | `linear.x` value mapped to `v_cmd=1000` |
-| `max_angular_z` | `1.5` | `angular.z` value mapped to `w_cmd=1000` |
 | `send_rate_hz` | `50.0` | Command packet send rate |
 | `read_rate_hz` | `100.0` | Serial read polling rate |
 | `cmd_timeout_sec` | `0.3` | Timeout after the latest `/cmd_vel` |
@@ -144,6 +144,6 @@ Both ROS and MCU firmware should have timeout safety. ROS timeout handles upstre
 ## Design Principles
 
 - The MCU owns low-level drive control.
-- The ROS node normalizes `/cmd_vel` and forwards it to the MCU.
+- The ROS node converts `/cmd_vel` to milli m/s and milli rad/s and forwards the physical values to the MCU without normalization.
 - Kick-start, ramp limiting, minimum PWM, per-wheel gain, and watchdog logic belong in MCU firmware.
 - ROS and MCU should both implement timeout safety mechanisms.

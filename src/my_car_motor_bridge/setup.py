@@ -29,7 +29,7 @@ setup(
     zip_safe=True,
     maintainer="Bak siu",
     maintainer_email="atomicw63.546@gmail.com",
-    description="ROS2 motor bridge that converts /cmd_vel to normalized MCU serial packets.",
+    description="ROS2 motor bridge that converts /cmd_vel to milli-unit MCU serial packets.",
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={
