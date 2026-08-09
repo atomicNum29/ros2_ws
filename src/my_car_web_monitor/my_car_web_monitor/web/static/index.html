@@ -410,6 +410,10 @@
           streamStatus,
           cardError,
           peerConnection: null,
+          frameWatchdog: null,
+          lastVideoTime: 0,
+          lastFrameAt: 0,
+          lastFramesDecoded: 0,
         };
 
         startButton.addEventListener("click", () => startStream(card));
@@ -438,15 +442,28 @@
       async function startStream(card) {
         if (card.peerConnection) return;
         card.cardError.textContent = "";
+        card.lastVideoTime = 0;
+        card.lastFrameAt = 0;
+        card.lastFramesDecoded = 0;
         card.peerConnection = new RTCPeerConnection();
         card.peerConnection.addTransceiver("video", { direction: "recvonly" });
         card.peerConnection.ontrack = (event) => {
           card.video.srcObject = event.streams[0];
+          card.lastVideoTime = card.video.currentTime;
+          card.lastFrameAt = performance.now();
+          event.track.onended = () => markStreamInterrupted(card, "video track ended");
+          event.track.onmute = () => markStreamInterrupted(card, "video track muted");
         };
         card.peerConnection.onconnectionstatechange = () => {
-          setText(card.connectionStatus, "connection", card.peerConnection.connectionState);
+          if (!card.peerConnection) return;
+          const state = card.peerConnection.connectionState;
+          setText(card.connectionStatus, "connection", state);
+          if (["failed", "disconnected", "closed"].includes(state)) {
+            markStreamInterrupted(card, `connection ${state}`);
+          }
         };
         card.peerConnection.oniceconnectionstatechange = () => {
+          if (!card.peerConnection) return;
           setText(card.iceStatus, "ice", card.peerConnection.iceConnectionState);
         };
 
@@ -464,7 +481,8 @@
           });
           if (!response.ok) throw new Error(`offer failed: ${response.status}`);
           await card.peerConnection.setRemoteDescription(await response.json());
-          setText(card.streamStatus, "state", "streaming");
+          setText(card.streamStatus, "state", "connecting");
+          card.frameWatchdog = window.setInterval(() => void checkVideoProgress(card), 1000);
         } catch (error) {
           card.cardError.textContent = error.message;
           await stopStream(card);
@@ -472,6 +490,10 @@
       }
 
       async function stopStream(card) {
+        if (card.frameWatchdog) {
+          window.clearInterval(card.frameWatchdog);
+          card.frameWatchdog = null;
+        }
         if (card.peerConnection) {
           card.peerConnection.getTransceivers().forEach((transceiver) => {
             if (transceiver.stop) transceiver.stop();
@@ -483,6 +505,38 @@
         setText(card.connectionStatus, "connection", "idle");
         setText(card.iceStatus, "ice", "idle");
         setText(card.streamStatus, "state", "idle");
+      }
+
+      function markStreamInterrupted(card, reason) {
+        if (!card.peerConnection) return;
+        setText(card.streamStatus, "state", "interrupted");
+        card.cardError.textContent = reason;
+      }
+
+      async function checkVideoProgress(card) {
+        if (!card.peerConnection || card.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+
+        const peerConnection = card.peerConnection;
+        let inboundVideo;
+        const stats = await peerConnection.getStats();
+        if (card.peerConnection !== peerConnection) return;
+        stats.forEach((report) => {
+          if (report.type === "inbound-rtp" && report.kind === "video") inboundVideo = report;
+        });
+
+        const now = performance.now();
+        const framesDecoded = inboundVideo?.framesDecoded || 0;
+        const videoAdvanced = card.video.currentTime > card.lastVideoTime;
+        const decodedAdvanced = framesDecoded > card.lastFramesDecoded;
+        if (videoAdvanced || decodedAdvanced) {
+          card.lastVideoTime = card.video.currentTime;
+          card.lastFrameAt = now;
+          card.cardError.textContent = "";
+          setText(card.streamStatus, "state", "streaming");
+        } else if (card.lastFrameAt && now - card.lastFrameAt > 2000) {
+          markStreamInterrupted(card, "no video frames received for 2 seconds");
+        }
+        card.lastFramesDecoded = framesDecoded;
       }
 
       async function startAllStreams() {
@@ -556,4 +610,3 @@
     </script>
   </body>
 </html>
-

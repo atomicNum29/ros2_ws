@@ -128,6 +128,7 @@ Expected ROS parameters or environment-backed settings:
 - `camera_width`: default `1280`
 - `camera_height`: default `720`
 - `camera_fps`: default `15`
+- `webrtc_packet_max`: encoded RTP payload limit, default `1100` for tunnel MTU safety
 - `camera_streams`: stream list such as `front:picamera2:0,debug:ros_image:/camera/image_raw`
 - `cmd_vel_topic`: default `/cmd_vel`
 - `motor_status_topic`: default `/motor_bridge_node/status`
@@ -205,4 +206,3 @@ Raspberry Pi Camera direct run:
 Multiple direct camera stream example:
 
     CAMERA_STREAMS=front:picamera2:0,rear:picamera2:1 ros2 run my_car_web_monitor web_monitor_node
-

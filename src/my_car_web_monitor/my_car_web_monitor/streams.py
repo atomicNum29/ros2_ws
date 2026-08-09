@@ -75,7 +75,11 @@ class StreamRegistry:
         specs = parse_stream_specs(settings)
         self._specs = {spec.stream_id: spec for spec in specs}
         self._managers = {
-            spec.stream_id: PeerManager(build_source(spec, settings)) for spec in specs
+            spec.stream_id: PeerManager(
+                build_source(spec, settings),
+                packet_max=settings.webrtc_packet_max,
+            )
+            for spec in specs
         }
 
     def list_streams(self) -> list[dict[str, str]]:
@@ -96,4 +100,3 @@ class StreamRegistry:
     async def close(self) -> None:
         for manager in self._managers.values():
             await manager.close()
-
