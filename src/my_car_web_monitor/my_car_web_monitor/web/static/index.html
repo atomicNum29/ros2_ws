@@ -161,6 +161,36 @@
         color: #fff;
       }
 
+      .speed-controls {
+        display: grid;
+        gap: 10px;
+        margin: 14px 0;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel-2);
+      }
+
+      .speed-control {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px 12px;
+        align-items: center;
+        font-size: 0.9rem;
+      }
+
+      .speed-control input {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+
+      .speed-value {
+        min-width: 3.5rem;
+        text-align: right;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+      }
+
       .teleop-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -234,6 +264,18 @@
             <button id="connect-control" class="primary">Connect</button>
             <button id="disconnect-control">Disconnect</button>
           </div>
+          <div class="speed-controls">
+            <label class="speed-control" for="linear-speed">
+              <span>Linear speed</span>
+              <output id="linear-speed-value" class="speed-value">0.30 m/s</output>
+              <input id="linear-speed" type="range" min="0" max="1" step="0.05" value="0.3" />
+            </label>
+            <label class="speed-control" for="angular-speed">
+              <span>Angular speed</span>
+              <output id="angular-speed-value" class="speed-value">1.00 rad/s</output>
+              <input id="angular-speed" type="range" min="0" max="3" step="0.1" value="1" />
+            </label>
+          </div>
           <div class="teleop-grid">
             <div></div>
             <button data-command="forward">W</button>
@@ -285,6 +327,10 @@
       const connectControlButton = document.getElementById("connect-control");
       const disconnectControlButton = document.getElementById("disconnect-control");
       const stopControlButton = document.getElementById("stop-control");
+      const linearSpeedInput = document.getElementById("linear-speed");
+      const angularSpeedInput = document.getElementById("angular-speed");
+      const linearSpeedValue = document.getElementById("linear-speed-value");
+      const angularSpeedValue = document.getElementById("angular-speed-value");
       const controlState = document.getElementById("control-state");
       const cmdStatus = document.getElementById("cmd-status");
       const topicStatus = document.getElementById("topic-status");
@@ -435,8 +481,19 @@
         const response = await fetch("/control/config");
         if (!response.ok) throw new Error(`control config failed: ${response.status}`);
         const payload = await response.json();
-        teleopState.linearSpeed = payload.linear_speed;
-        teleopState.angularSpeed = payload.angular_speed;
+        linearSpeedInput.max = payload.linear_speed;
+        linearSpeedInput.value = payload.linear_speed;
+        angularSpeedInput.max = payload.angular_speed;
+        angularSpeedInput.value = payload.angular_speed;
+        updateSpeedSettings();
+      }
+
+      function updateSpeedSettings() {
+        teleopState.linearSpeed = Number(linearSpeedInput.value);
+        teleopState.angularSpeed = Number(angularSpeedInput.value);
+        linearSpeedValue.textContent = `${teleopState.linearSpeed.toFixed(2)} m/s`;
+        angularSpeedValue.textContent = `${teleopState.angularSpeed.toFixed(2)} rad/s`;
+        if (activeKeys.size) sendCurrentCommand();
       }
 
       async function startStream(card) {
@@ -592,6 +649,8 @@
       stopAllButton.addEventListener("click", stopAllStreams);
       connectControlButton.addEventListener("click", connectControl);
       disconnectControlButton.addEventListener("click", disconnectControl);
+      linearSpeedInput.addEventListener("input", updateSpeedSettings);
+      angularSpeedInput.addEventListener("input", updateSpeedSettings);
       stopControlButton.addEventListener("click", () => {
         activeKeys.clear();
         sendControlMessage({ type: "stop" });
