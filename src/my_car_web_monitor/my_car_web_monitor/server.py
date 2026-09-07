@@ -86,6 +86,51 @@ def create_app(node: Node, settings: Settings) -> FastAPI:
             raise HTTPException(status_code=503, detail="ROS control bridge is not ready")
         return control_bridge.status()
 
+    @app.websocket("/ws/status")
+    async def status_ws(websocket: WebSocket) -> None:
+        # Independent subscribers: no operator ownership and no stop commands.
+        await websocket.accept()
+        if control_bridge is None:
+            await websocket.close(code=1011)
+            return
+        stream = control_bridge.status_stream
+        client = stream.subscribe()
+
+        async def send_statuses() -> None:
+            while True:
+                try:
+                    snapshot = await asyncio.wait_for(client.queue.get(), timeout=1.0)
+                    payload = {"type": "motor_status", **snapshot.payload(),
+                               "stream_dropped_count": client.dropped}
+                except TimeoutError:
+                    payload = {"type": "status_heartbeat"}
+                await asyncio.wait_for(websocket.send_json(payload), timeout=2.0)
+
+        async def receive_disconnect() -> None:
+            while True:
+                message = await websocket.receive()
+                if message["type"] == "websocket.disconnect":
+                    return
+                # This socket is read-only; incoming messages never control ROS.
+
+        sender = asyncio.create_task(send_statuses())
+        receiver = asyncio.create_task(receive_disconnect())
+        try:
+            done, _ = await asyncio.wait({sender, receiver}, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                task.result()
+        except (WebSocketDisconnect, TimeoutError, RuntimeError, OSError):
+            logger.info("Status websocket disconnected or send timed out")
+        finally:
+            stream.unsubscribe(client)
+            sender.cancel()
+            receiver.cancel()
+            await asyncio.gather(sender, receiver, return_exceptions=True)
+            try:
+                await websocket.close()
+            except (RuntimeError, OSError):
+                pass
+
     @app.websocket("/ws/control")
     async def control_ws(websocket: WebSocket) -> None:
         nonlocal active_control_socket

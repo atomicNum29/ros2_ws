@@ -209,10 +209,30 @@ Multiple direct camera stream example:
 
 ## Motor status compatibility
 
-The motor bridge publishes System Status v2 as nested JSON (`drivers`, `wheels`, and per-value `valid`) on `/motor_bridge_node/status`. Legacy fallback retains `seq/state/error/battery_mv`. The web monitor stores either JSON object unchanged and displays it using `JSON.stringify`; a dedicated wheel dashboard is not implemented. Check each `valid` flag before treating telemetry as a current measurement, and also check `motor_status_age_sec` for loss of status traffic. CAN bridge mode does not publish motor status; previously received values will age rather than update.
+The motor bridge publishes System Status v2 as nested JSON (`drivers`, `wheels`, and per-value `valid`) on `/motor_bridge_node/status`. Legacy fallback retains `seq/state/error/battery_mv`. The web monitor preserves either JSON schema and presents a vehicle status dashboard above the camera/control panels. LF/RF and LR/RR cards follow the physical wheel layout, with Driver A mapped to LF/RR and Driver B to RF/LR. Each card shows RPM, current in amperes, signed controller output, validity and decoded motor error bits. System errors show Korean labels, bit numbers, masks, wire names and explanations; all 16 system bits and the original JSON are available in expandable details. Check each `valid` flag before treating telemetry as a current measurement, and also check `motor_status_age_sec` for loss of status traffic. CAN bridge mode does not publish motor status; previously received values will age rather than update.
 
 Status API compatibility tests (workspace root, with the web virtual environment and sourced ROS dependencies):
 
 ```bash
 src/my_car_web_monitor/.venv/bin/python -m pytest src/my_car_web_monitor/test/test_motor_status_api.py
 ```
+
+## Vehicle status dashboard
+
+- MCU state and Driver A/B voltage appear above the four motor cards. Voltage is shown in V and current in A; RPM and controller output keep their signs.
+- System Status v2 and legacy errors have separate mappings. CAN_TX_FAILURE alone does not turn the displayed MCU state into FAULT. Reserved bits (including bit 12) are labelled as reserved.
+- Each motor decodes ALARM, CTRL_FAIL, OVER_VOLT, OVER_TEMP, OVER_LOAD, HALL_FAIL, INV_VEL and STALL. Multiple active errors appear together; hover over a motor error for its bit/mask and explanation.
+- A read-only `/ws/status` WebSocket starts automatically. Each ROS status callback is forwarded as its own immutable message in arrival order; there is no timer sampling of the latest value. It does not open the control WebSocket or send velocity commands, so multiple spectators can monitor without taking the control session. `/control/status` remains a latest-snapshot debugging API.
+- A 250 ms browser timer ages the last received snapshot even if status messages stop. If message age exceeds 1 s or the status socket closes, measurements become `—` and state/errors are marked as last received. The server sends a heartbeat after 1 s without status, the browser reconnects if no message/heartbeat arrives for 3 s, and a closed socket retries after 1 s. Heartbeats never reset the age of telemetry. This UI threshold is distinct from MCU wheel/voltage freshness (500 ms / 3 s).
+- A value is displayed only when both the MCU validity bit and its JSON `valid` flag permit it, the packet is recent, and its numeric fields have the expected types/ranges. Invalid old values remain accessible in the raw message section. Legacy messages show their representative battery voltage and identify per-motor information as unavailable.
+- Each client has a bounded 256-message queue. ROS callbacks never wait for a slow browser. If that queue overflows, the oldest queued message is removed and `stream_dropped_count` is explicitly shown in the UI. `motor_status_received_count` counts ROS messages seen by the web process and is displayed separately from the MCU seq. It does not prove whether packets were lost before ROS. A reconnect begins with the latest snapshot; disconnected history is not replayed.
+- The UI updates numeric values on every status frame while reusing error/bit DOM nodes until those flags change. Number formatters are cached, and raw JSON is rendered only when expanded.
+- The layout stacks for narrow screens. Korean labels use the browser's available Korean fonts.
+
+Browser regression tests use actual page HTML/CSS/JS in Chromium with mocked read-only responses; no MCU, camera or ROS commands are used. With Chromium running locally at debug port 9229, run:
+
+```bash
+MOTOR_UI_BROWSER_URL=http://127.0.0.1:9229 src/my_car_web_monitor/.venv/bin/python -m pytest src/my_car_web_monitor/test/test_motor_status_ui.py
+```
+
+Without `MOTOR_UI_BROWSER_URL`, browser tests skip. API tests run independently. Rebuild the web package and restart the web monitor after updating its installed static assets; reload the browser page.

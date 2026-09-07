@@ -28,6 +28,5 @@ setup(
     maintainer_email="atomicw63.546@gmail.com",
     description="Browser camera monitoring and ROS2 teleoperation bridge for my_car.",
     license="Apache-2.0",
-    tests_require=["pytest"],
 )
 
