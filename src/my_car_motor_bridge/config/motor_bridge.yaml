@@ -1,5 +1,9 @@
 motor_bridge_node:
   ros__parameters:
+    # Startup-only settings; restart the node to change modes.
+    serial_mode: "control"
+    legacy_fallback_enabled: true
+    legacy_fallback_timeout_sec: 1.0
     port: "/dev/ttyACM0"
     baudrate: 115200
     send_rate_hz: 50.0

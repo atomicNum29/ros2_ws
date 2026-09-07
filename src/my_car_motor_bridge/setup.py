@@ -31,7 +31,7 @@ setup(
     maintainer_email="atomicw63.546@gmail.com",
     description="ROS2 motor bridge that converts /cmd_vel to milli-unit MCU serial packets.",
     license="Apache-2.0",
-    tests_require=["pytest"],
+    extras_require={"test": ["pytest"]},
     entry_points={
         "console_scripts": [
             "motor_bridge_node = my_car_motor_bridge.motor_bridge_node:main",

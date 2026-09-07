@@ -46,7 +46,7 @@ ROS2 package plan for a browser-based vehicle monitoring and control interface.
         v
 [my_car_motor_bridge]
   - subscribes /cmd_vel
-  - sends normalized MCU serial packets
+  - sends milli-unit physical velocity MCU serial packets
   - publishes /motor_bridge_node/status
 ```
 
@@ -206,3 +206,13 @@ Raspberry Pi Camera direct run:
 Multiple direct camera stream example:
 
     CAMERA_STREAMS=front:picamera2:0,rear:picamera2:1 ros2 run my_car_web_monitor web_monitor_node
+
+## Motor status compatibility
+
+The motor bridge publishes System Status v2 as nested JSON (`drivers`, `wheels`, and per-value `valid`) on `/motor_bridge_node/status`. Legacy fallback retains `seq/state/error/battery_mv`. The web monitor stores either JSON object unchanged and displays it using `JSON.stringify`; a dedicated wheel dashboard is not implemented. Check each `valid` flag before treating telemetry as a current measurement, and also check `motor_status_age_sec` for loss of status traffic. CAN bridge mode does not publish motor status; previously received values will age rather than update.
+
+Status API compatibility tests (workspace root, with the web virtual environment and sourced ROS dependencies):
+
+```bash
+src/my_car_web_monitor/.venv/bin/python -m pytest src/my_car_web_monitor/test/test_motor_status_api.py
+```

@@ -54,7 +54,10 @@ class SerialTransport:
         if not self.is_open() or self._serial is None:
             return False
         try:
-            self._serial.write(data)
+            written = self._serial.write(data)
+            if written != len(data):
+                self.close()
+                return False
             return True
         except SerialException:
             self.close()
