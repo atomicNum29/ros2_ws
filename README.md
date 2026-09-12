@@ -47,6 +47,7 @@ RealSense 저장소에는 메시지 패키지 `realsense2_camera_msgs`와 모델
 flowchart LR
     Browser[브라우저] <-->|HTTP / WebSocket / WebRTC| Web[my_car_web_monitor]
     Camera[Picamera2 또는 합성 영상] --> Web
+    T265 -->|Fisheye Image 토픽| Web
     Web -->|/cmd_vel · Twist| Bridge[my_car_motor_bridge]
     Bridge -->|/motor_bridge_node/status · JSON| Web
     Bridge <-->|USB Serial| MCU[Wheel-Dragoon MCU]
@@ -197,7 +198,27 @@ ros2 topic hz /camera/pose/sample
 ros2 topic hz /scan
 ```
 
-차체 모델이 필요하면 `my_car_package`의 모델 launch 하나를 함께 실행한다. SLAM에는 센서 토픽뿐 아니라 일관된 TF 연결이 필요하다. 저장소의 SLAM 설정은 `odom_frame`, `base_link`, `/scan`을 사용하므로 T265의 TF와 차체 모델 사이 연결도 확인해야 한다. T265 데이터가 웹 영상에 자동 연결되는 것은 아니며, 현재 웹 영상 소스는 Picamera2와 합성 영상이다.
+차체 모델이 필요하면 `my_car_package`의 모델 launch 하나를 함께 실행한다. SLAM에는 센서 토픽뿐 아니라 일관된 TF 연결이 필요하다. 저장소의 SLAM 설정은 `odom_frame`, `base_link`, `/scan`을 사용하므로 T265의 TF와 차체 모델 사이 연결도 확인해야 한다.
+
+### ROS 이미지 토픽을 웹에서 보기
+
+T265 드라이버를 실행한 상태에서 웹 노드에 Fisheye 토픽을 등록한다. 토픽 이름은 센서의 namespace 설정에 따라 달라질 수 있으므로 `ros2 topic list -t`로 확인한다.
+
+```bash
+CAMERA_STREAMS=left:ros_image:/camera/fisheye1/image_raw,right:ros_image:/camera/fisheye2/image_raw \
+  ros2 run my_car_web_monitor web_monitor_node
+```
+
+Picamera2와 함께 등록할 수도 있다.
+
+```bash
+CAMERA_STREAMS=front:picamera2:0,left:ros_image:/camera/fisheye1/image_raw,right:ros_image:/camera/fisheye2/image_raw \
+  ros2 run my_car_web_monitor web_monitor_node
+```
+
+브라우저에는 기존 카메라와 동일한 스트림 카드가 생성된다. 시작하면 토픽을 구독하고, 마지막 시청자가 연결을 종료하면 구독을 해제한다. `ros_image`는 `sensor_msgs/msg/Image`, `ros_compressed`는 `sensor_msgs/msg/CompressedImage`를 받는다. 압축 토픽이 실제 발행 중이라면 `left:ros_compressed:/camera/fisheye1/image_raw/compressed`처럼 지정한다.
+
+T265의 `mono8`을 비롯해 `8UC1`, `rgb8`, `bgr8`, `rgba8`, `bgra8`과 JPEG/PNG 압축 영상을 지원한다. 깊이 영상과 그 외 인코딩은 지원하지 않는다. ROS 영상은 원본 해상도를 유지하며 `CAMERA_FPS` 속도로 최신 영상을 전송한다. 첫 이미지 전에는 대기하고, 센서 발행이 중단되면 마지막 정상 이미지가 반복되므로 정지 화면만으로 센서 수신 상태를 판단하지 않는다. 상세 동작은 [웹 패키지 문서](src/my_car_web_monitor/README.md)를 참고한다.
 
 ## 웹 설정과 인터페이스
 
@@ -207,8 +228,8 @@ ros2 topic hz /scan
 | --- | --- | --- |
 | `HOST` / `PORT` | `0.0.0.0` / `8443` | 서버 주소와 포트 |
 | `CAMERA_SOURCE` | `picamera2` | 기본 소스, `synthetic` 지원 |
-| `CAMERA_STREAMS` | 빈 문자열 | `이름:소스타입[:장치]`를 쉼표로 나열 |
-| `CAMERA_WIDTH` / `CAMERA_HEIGHT` / `CAMERA_FPS` | `1280` / `720` / `15` | 영상 크기와 FPS |
+| `CAMERA_STREAMS` | 빈 문자열 | `이름:소스타입[:장치 또는 ROS 토픽]`을 쉼표로 나열 |
+| `CAMERA_WIDTH` / `CAMERA_HEIGHT` / `CAMERA_FPS` | `1280` / `720` / `15` | 로컬 영상 크기와 전송 FPS. ROS 영상은 원본 크기 사용 |
 | `CMD_VEL_TOPIC` | `/cmd_vel` | 속도 명령 발행 토픽 |
 | `MOTOR_STATUS_TOPIC` | `/motor_bridge_node/status` | 모터 상태 구독 토픽 |
 | `CONTROL_LINEAR_SPEED` | `1.0` | 선속도 설정 및 제한, m/s |
@@ -274,7 +295,7 @@ python -m colcon test-result --verbose
 
 ## 현재 범위와 관련 문서
 
-현재 영상 소스는 `picamera2`와 `synthetic`을 지원한다. ROS 이미지 토픽(`Image`, `CompressedImage`) 입력은 아직 구현되지 않았다. 웹·모터·센서·SLAM을 한 번에 실행하는 통합 launch도 없으므로 필요한 구성 요소를 각각 실행한다.
+현재 영상 소스는 `picamera2`, `synthetic`, `ros_image`, `ros_compressed`를 지원한다. 웹·모터·센서·SLAM을 한 번에 실행하는 통합 launch는 없으므로 필요한 구성 요소를 각각 실행한다.
 
 - [모터 브리지 프로토콜·파라미터·진단 가이드](src/my_car_motor_bridge/README.md)
 - [웹 모니터 상세 문서](src/my_car_web_monitor/README.md): 초기 설계 내용도 포함하므로 실제 설정은 코드와 이 문서의 기본값을 확인한다.

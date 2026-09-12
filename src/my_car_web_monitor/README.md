@@ -52,12 +52,12 @@ ROS2 package plan for a browser-based vehicle monitoring and control interface.
 
 ## ROS Interfaces
 
-Planned control interfaces:
+Control interfaces:
 
 - Publish: `/cmd_vel` (`geometry_msgs/msg/Twist`)
 - Subscribe: `/motor_bridge_node/status` (`std_msgs/msg/String`)
 
-Planned camera interfaces:
+Camera interfaces:
 
 - Subscribe: configurable raw image topics (`sensor_msgs/msg/Image`)
 - Subscribe: configurable compressed image topics (`sensor_msgs/msg/CompressedImage`)
@@ -141,7 +141,7 @@ Expected ROS parameters or environment-backed settings:
 
 This package needs both ROS2 Python modules and web streaming Python modules at runtime. A successful colcon build does not automatically prove those modules are available in the shell that runs ros2 run.
 
-ROS-side modules are provided by a sourced ROS2 environment: rclpy, geometry_msgs, and std_msgs. Web/media Python dependencies are declared in pyproject.toml and are installed with uv sync.
+ROS-side modules are provided by a sourced ROS2 environment: rclpy, geometry_msgs, std_msgs, and sensor_msgs. Web/media Python dependencies are declared in pyproject.toml and are installed with uv sync. ROS image conversion uses NumPy and Pillow; cv_bridge is not required.
 
 Do not install web/media dependencies into the global system Python. On modern Ubuntu and Raspberry Pi OS systems, global pip installs are commonly blocked by PEP 668 and should be avoided anyway.
 
@@ -190,10 +190,10 @@ Initial implementation exists.
 - ament_python package skeleton is present.
 - web_monitor_node console script is defined.
 - FastAPI serves the browser UI and health endpoint.
-- WebRTC streaming supports direct picamera2 and synthetic sources.
+- WebRTC streaming supports direct picamera2, synthetic, ROS raw image and ROS compressed image sources.
 - Browser control WebSocket publishes geometry_msgs/msg/Twist to /cmd_vel.
 - Motor status is read from /motor_bridge_node/status.
-- ROS image topic camera sources are still planned for the next implementation phase.
+- ROS image subscriptions share the existing web node and executor and start/stop with stream viewers.
 
 Development run without Raspberry Pi Camera hardware:
 
@@ -206,6 +206,50 @@ Raspberry Pi Camera direct run:
 Multiple direct camera stream example:
 
     CAMERA_STREAMS=front:picamera2:0,rear:picamera2:1 ros2 run my_car_web_monitor web_monitor_node
+
+## ROS image streams (T265 Fisheye)
+
+Register ROS sources in `CAMERA_STREAMS`, using the same stream IDs and browser start/stop controls as Picamera2. A nonempty `CAMERA_STREAMS` overrides `CAMERA_SOURCE`. Source types are `picamera2`, `synthetic`, `ros_image`, and `ros_compressed`; IDs must be unique, and ROS sources require a topic name.
+
+After sourcing the sensor workspace, run the T265 driver in a separate terminal:
+
+```bash
+ros2 launch realsense2_camera rs_launch.py device_type:=t265 enable_fisheye1:=true enable_fisheye2:=true
+```
+
+Run `ros2 topic list -t` in another sourced terminal while the driver runs. Adjust the following topic names if the driver's namespace differs. From the vehicle workspace root, with its ROS environment and web venv active:
+
+```bash
+CAMERA_STREAMS=left:ros_image:/camera/fisheye1/image_raw,right:ros_image:/camera/fisheye2/image_raw \
+  ros2 run my_car_web_monitor web_monitor_node
+
+# Alternatively, include a directly attached Pi camera:
+CAMERA_STREAMS=front:picamera2:0,left:ros_image:/camera/fisheye1/image_raw \
+  ros2 run my_car_web_monitor web_monitor_node
+```
+
+| Source type | ROS message | Example |
+| --- | --- | --- |
+| `ros_image` | `sensor_msgs/msg/Image` | `left:ros_image:/camera/fisheye1/image_raw` |
+| `ros_compressed` | `sensor_msgs/msg/CompressedImage` | `left:ros_compressed:/camera/fisheye1/image_raw/compressed` |
+
+Compressed streams require an existing compressed-image publisher. The web node does not create an image_transport republisher. Raw encodings supported are `mono8` (T265 Fisheye), `8UC1`, `rgb8`, `bgr8`, `rgba8`, and `bgra8`. Row padding is respected and grayscale is converted to RGB for the existing WebRTC track. Compressed JPEG/PNG images are supported; depth images, compressedDepth and other raw encodings are rejected with throttled warnings. A malformed image is skipped and a later valid image resumes streaming.
+
+ROS sources implement the same `FrameSource.start/stop/read` interface as direct cameras. The registry passes the existing ROS node to each source. The first viewer creates the subscription; the last viewer disconnecting or server shutdown destroys it. Restarting waits for a new image, and callbacks from a retired subscription are ignored. `/streams` exposes the topic as `device`, so the existing UI displays it without special camera controls.
+
+Subscriptions use best-effort, volatile, keep-last depth 1 QoS. The ROS callback stores only the latest message under a thread lock; it does not decode images or enqueue work into the web event loop. Each viewer samples the latest image independently at `CAMERA_FPS`, and decoded pixels are cached across viewers. Faster incoming images are dropped between samples, rather than building a delayed playback queue. `CAMERA_WIDTH` and `CAMERA_HEIGHT` do not resize ROS images: the published resolution is preserved. WebRTC timestamps follow the output FPS, not the ROS header clock, so bag replay clock changes do not rewind video timestamps.
+
+Before the first valid image, video waits without blocking the web server. If publication stops after a valid image, the last image is repeated until a new one arrives; there is currently no camera-staleness indicator. Use `ros2 topic hz /camera/fisheye1/image_raw` to check reception when the picture appears frozen.
+
+After updating, rebuild with the active web venv and restart the web node:
+
+```bash
+python -m colcon build --symlink-install --packages-select my_car_web_monitor
+source install/local_setup.bash
+python -m pytest src/my_car_web_monitor/test/test_ros_image_source.py
+```
+
+Tests cover padded grayscale/color images, JPEG/PNG, invalid-frame recovery, cross-thread bursts, multiple readers, stop/restart, stream discovery, and real ROS best-effort/reliable publishers feeding a WebRTC video track without sensor hardware. A local WebRTC test also negotiates two viewers, receives encoded video, and checks subscription cleanup when the last peer closes; it needs local network interface/socket access.
 
 ## Motor status compatibility
 

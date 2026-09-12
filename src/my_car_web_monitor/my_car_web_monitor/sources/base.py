@@ -6,7 +6,7 @@ from typing import Any
 
 
 class FrameSource(ABC):
-    """Common interface for local video frame producers."""
+    """Common interface for camera, synthetic and ROS video frame producers."""
 
     width: int
     height: int
@@ -25,4 +25,3 @@ class FrameSource(ABC):
     @abstractmethod
     async def read(self) -> Any:
         """Return the next frame as a numpy ndarray."""
-

@@ -37,7 +37,7 @@ def create_app(node: Node, settings: Settings) -> FastAPI:
     @app.on_event("startup")
     async def startup_event() -> None:
         nonlocal stream_registry, control_bridge
-        stream_registry = StreamRegistry(settings)
+        stream_registry = StreamRegistry(settings, node)
         control_bridge = RosControlBridge(node, settings)
 
     @app.on_event("shutdown")
@@ -202,4 +202,3 @@ def create_app(node: Node, settings: Settings) -> FastAPI:
                 logger.warning("Failed to publish stop command on websocket shutdown", exc_info=True)
 
     return app
-
