@@ -291,16 +291,15 @@ CAMERA_SOURCE=synthetic CONTROL_LINEAR_SPEED=0.3 CONTROL_ANGULAR_SPEED=1.0 \
 
 ## rosbag 및 SLAM 실험
 
-[`my_car_package/launch`](src/my_car_package/launch)의 SLAM 관련 파일은 개발 환경에 맞춘 실험용 구성이다. bag 데이터와 외부 설정 파일을 준비하고 경로를 수정해야 한다. 사용하는 구성에 따라 `tf2_ros`, `rosbag2`, `slam_toolbox`, `cartographer_ros` 및 bag 저장 형식 플러그인이 추가로 필요하며, 모든 의존성이 현재 `package.xml`에 선언되어 있지는 않다.
+[`my_car_package/launch`](src/my_car_package/launch)의 SLAM 관련 파일은 개발 환경에 맞춘 실험용 구성이다. bag 데이터와 외부 설정 파일을 준비하고 경로를 수정해야 한다. 사용하는 구성에 따라 `tf2_ros`, `rosbag2`, `slam_toolbox` 및 bag 저장 형식 플러그인이 추가로 필요하며, 모든 의존성이 현재 `package.xml`에 선언되어 있지는 않다.
 
 | launch 파일 | 현재 동작 및 준비 사항 |
 | --- | --- |
 | `play_bag_env.launch.py` | 모델·보조 TF와 선택적 RViz 실행. bag 재생은 별도로 실행 |
 | `offline_slam.launch.py` | bag 재생 + SLAM Toolbox 동기 온라인 launch. `/root/my_offline_params.yaml` 필요 |
 | `record_slam_with_bag.launch.py` | bag 재생 + SLAM Toolbox. `/root/slam_toolbox.yaml` 필요. 이름과 달리 녹화 프로세스는 실행 목록에서 주석 처리됨 |
-| `run_cartographer.launch.py` | bag 재생 + Cartographer. `/root/cartographer_test/baseline.lua` 필요 |
 
-bag 재생 launch에는 `bag_file`, `play_speed`(기본 `0.1`), `use_rviz`(기본 `false`) 인자가 있다. SLAM/Cartographer launch의 RViz 경로는 `/root/.rviz2/Map_TF_RM_LS.rviz`로 고정되어 있다. 저장소의 [`slam_toolbox.yaml`](src/my_car_package/launch/yaml/slam_toolbox.yaml)은 현재 launch에서 자동 참조하지 않는다.
+bag 재생 launch에는 `bag_file`, `play_speed`(기본 `0.1`), `use_rviz`(기본 `false`) 인자가 있다. SLAM launch의 RViz 경로는 `/root/.rviz2/Map_TF_RM_LS.rviz`로 고정되어 있다. 저장소의 [`slam_toolbox.yaml`](src/my_car_package/launch/yaml/slam_toolbox.yaml)은 현재 launch에서 자동 참조하지 않는다.
 
 위 `/root/...` 경로는 현재 코드에 고정된 값을 설명하기 위해 그대로 표기했다. 실제 사용 전에 환경에 맞게 launch를 수정해야 한다. `/dev/...` 장치 경로와 `/usr/bin/python3` 시스템 실행 파일 경로도 절대 경로를 유지한다.
 
