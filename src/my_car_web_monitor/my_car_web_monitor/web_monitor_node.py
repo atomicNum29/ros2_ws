@@ -38,6 +38,8 @@ def main(args: list[str] | None = None) -> None:
 
     try:
         server.run()
+    except KeyboardInterrupt:
+        node.get_logger().info("Web server stopped; shutting down ROS node...")
     finally:
         executor.shutdown()
         spin_thread.join(timeout=2.0)
@@ -47,4 +49,3 @@ def main(args: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-
