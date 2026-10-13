@@ -17,7 +17,8 @@ ros2_ws/
 ├── src/
 │   ├── my_car_package/
 │   ├── my_car_motor_bridge/
-│   └── my_car_web_monitor/
+│   ├── my_car_web_monitor/
+│   └── camera_ros/         # 별도로 클론한 외부 카메라 드라이버 (Git 추적 제외)
 ├── agent/                  # 개발 계획 및 작업 보고서
 ├── build/                  # colcon 빌드 산출물
 ├── install/                # 설치된 패키지와 환경 설정
@@ -28,6 +29,14 @@ ros2_ws/
 
 ## 외부 센서 패키지
 
+Raspberry Pi 카메라 등 libcamera 지원 카메라의 영상을 ROS 이미지 토픽으로 발행하기 위해 [`camera_ros`](https://github.com/christianrauch/camera_ros)를 `src/camera_ros/`에 별도로 클론해 사용한다. 이 디렉토리는 `.gitignore`로 추적에서 제외하므로, 이 저장소를 클론한 다른 장비에서는 아래 명령으로 추가해야 한다. Git ignore 여부와 관계없이 `colcon`은 해당 패키지를 발견하고 함께 빌드한다.
+
+```bash
+git clone https://github.com/christianrauch/camera_ros.git src/camera_ros
+```
+
+`camera_ros`는 `ament_cmake` 패키지이며 libcamera 0.1 이상이 필요하다. 기본적으로 아래 `rosdep install` 명령으로 의존성을 설치한다. 시스템에 설치된 libcamera를 사용하는 경우에는 `--skip-keys=libcamera`를 추가한다. 카메라 모듈에 맞는 libcamera 설치·빌드 방법은 [업스트림 README](https://github.com/christianrauch/camera_ros#build-instructions)를 참고한다.
+
 T265와 YDLidar X4-Pro 드라이버는 별도 센서 워크스페이스의 `../../robot_ws/ros2_ws/src/`에서 관리한다. 이 저장소로 소스를 복사하지 않고, 빌드된 센서 환경을 먼저 불러와 함께 사용한다.
 
 | 센서 / 패키지 | 역할 | 현재 구성 |
@@ -37,7 +46,7 @@ T265와 YDLidar X4-Pro 드라이버는 별도 센서 워크스페이스의 `../.
 
 RealSense 저장소에는 메시지 패키지 `realsense2_camera_msgs`와 모델 패키지 `realsense2_description`도 포함된다. X4-Pro 설정은 드라이버의 `params/X4-Pro.yaml`에 있으며, 현재 `params/ydlidar.yaml`에도 같은 장비 설정이 적용되어 있다. 주요 값은 포트 `/dev/ttyUSB0`, baudrate `128000`, 프레임 `laser_frame`이다.
 
-센서 드라이버는 기존 워크스페이스에서 유지하고 차량별 센서 설정·TF·통합 launch는 이 워크스페이스에서 관리하는 방향이다. 현재 통합 launch는 아직 없으며, 다른 장비에 환경을 재현할 때는 드라이버 버전뿐 아니라 로컬 수정과 SDK 버전도 함께 보존해야 한다.
+T265와 X4-Pro 센서 드라이버는 기존 워크스페이스에서 유지하고 차량별 센서 설정·TF·통합 launch는 이 워크스페이스에서 관리하는 방향이다. 현재 통합 launch는 아직 없으며, 다른 장비에 환경을 재현할 때는 드라이버 버전뿐 아니라 로컬 수정과 SDK 버전도 함께 보존해야 한다.
 
 기존 센서 워크스페이스의 `my_car_bringup`은 `my_car_description` 모델을 함께 실행하고, `bringup.launch.py`는 SLAM도 실행한다. 현재 `my_car_package` 모델 launch와 함께 실행하면 차체 TF를 중복 발행할 수 있으므로, 아래 예제에서는 센서 드라이버만 각각 실행한다.
 
@@ -47,6 +56,7 @@ RealSense 저장소에는 메시지 패키지 `realsense2_camera_msgs`와 모델
 flowchart LR
     Browser[브라우저] <-->|HTTP / WebSocket / WebRTC| Web[my_car_web_monitor]
     Camera[Picamera2 또는 합성 영상] --> Web
+    CameraROS[libcamera / camera_ros] -->|Image 토픽| Web
     T265 -->|Fisheye Image 토픽| Web
     Web -->|/cmd_vel · Twist| Bridge[my_car_motor_bridge]
     Bridge -->|/motor_bridge_node/status · JSON| Web
@@ -153,6 +163,19 @@ ros2 topic echo /motor_bridge_node/status
 CAN 진단용 `serial_mode:=bridge`에서는 `/cmd_vel` 제어와 모터 상태 발행이 비활성화된다. 첫 유효 CAN 요청이 MCU를 BRIDGE로 전환하며, 노드 종료만으로 MCU가 CONTROL로 복귀하지 않는다. 모드 전환과 진단 요청은 [모터 브리지 문서](src/my_car_motor_bridge/README.md)를 참고한다.
 
 ### Raspberry Pi 카메라
+
+`camera_ros`로 카메라 영상을 발행하고 웹 모니터에서 ROS 이미지 소스로 구독한다. 워크스페이스를 빌드하고 환경을 불러온 뒤, 각각 별도 터미널에서 실행한다.
+
+```bash
+# 터미널 1: 카메라 드라이버 (카메라 0)
+ros2 run camera_ros camera_node --ros-args -p camera:=0
+
+# 터미널 2: 기본 노드 이름 camera의 이미지 토픽을 웹에 연결
+CAMERA_STREAMS=front:ros_image:/camera/image_raw \
+  ros2 run my_car_web_monitor web_monitor_node
+```
+
+영상 발행 여부는 `ros2 topic hz /camera/image_raw`로 확인한다. Picamera2 직접 연결 방식도 지원하며, 동일한 카메라를 사용하는 드라이버와 동시에 실행하지 않는다.
 
 시스템 카메라 스택과 Picamera2를 설치한 장비에서 실행한다. Picamera2는 `uv` 의존성에 포함되어 있지 않다.
 
