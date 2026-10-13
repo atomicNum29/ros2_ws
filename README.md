@@ -8,7 +8,7 @@
 
 | 패키지 | 역할 | 빌드 방식 |
 | --- | --- | --- |
-| [`my_car_package`](src/my_car_package) | 차체 URDF/Xacro·메시, TF, RViz, bag/SLAM 실험 launch | `ament_cmake` |
+| [`my_car_package`](src/my_car_package) | 차체 URDF/Xacro·메시, TF, RViz, 전·후방 카메라 및 bag/SLAM 실험 launch | `ament_cmake` |
 | [`my_car_motor_bridge`](src/my_car_motor_bridge/README.md) | `/cmd_vel` → MCU 시리얼 명령, 모터 상태 수신, CAN 진단 모드 | `ament_python` |
 | [`my_car_web_monitor`](src/my_car_web_monitor/README.md) | FastAPI 웹 UI, WebRTC 영상, ROS 원격 조종, 모터 상태 대시보드 | `ament_python` |
 
@@ -164,18 +164,32 @@ CAN 진단용 `serial_mode:=bridge`에서는 `/cmd_vel` 제어와 모터 상태 
 
 ### Raspberry Pi 카메라
 
-`camera_ros`로 카메라 영상을 발행하고 웹 모니터에서 ROS 이미지 소스로 구독한다. 워크스페이스를 빌드하고 환경을 불러온 뒤, 각각 별도 터미널에서 실행한다.
+[`rpi_cameras.launch.py`](src/my_car_package/launch/rpi_cameras.launch.py)는 `camera_ros`의 `camera_node` 두 개를 `front_camera`, `rear_camera`라는 이름으로 실행한다. 웹 모니터는 각 카메라의 ROS 이미지 토픽을 구독한다. launch와 설정 파일을 추가하거나 수정한 뒤에는 패키지를 다시 빌드하고 환경을 불러온다.
 
 ```bash
-# 터미널 1: 카메라 드라이버 (카메라 0)
-ros2 run camera_ros camera_node --ros-args -p camera:=0
+colcon build --symlink-install --packages-select my_car_package
+source install/local_setup.bash
+```
 
-# 터미널 2: 기본 노드 이름 camera의 이미지 토픽을 웹에 연결
-CAMERA_STREAMS=front:ros_image:/camera/image_raw \
+`camera_ros`도 앞의 환경 준비 및 빌드 절차에 따라 빌드되어 있어야 한다. 아래 명령은 각각 별도 터미널에서 실행한다.
+
+```bash
+# 터미널 1: 전·후방 카메라 드라이버
+ros2 launch my_car_package rpi_cameras.launch.py
+
+# 터미널 2: 전·후방 이미지 토픽을 웹에 연결
+CAMERA_STREAMS=front:ros_image:/front_camera/image_raw,rear:ros_image:/rear_camera/image_raw \
   ros2 run my_car_web_monitor web_monitor_node
 ```
 
-영상 발행 여부는 `ros2 topic hz /camera/image_raw`로 확인한다. Picamera2 직접 연결 방식도 지원하며, 동일한 카메라를 사용하는 드라이버와 동시에 실행하지 않는다.
+카메라 설정은 [`launch/yaml/cameras.yaml`](src/my_car_package/launch/yaml/cameras.yaml)에서 관리한다. 현재 전방은 카메라 인덱스 `0`, 후방은 `1`이며, 두 카메라 모두 센서 모드 `2028:1520`, 출력 해상도 `640×480`, 형식 `RGB888`, 자동 노출을 사용한다. `FrameDurationLimits`는 `[41666, 50000]` µs로 설정되어 약 20~24 FPS 범위에 해당한다. 카메라 인덱스와 센서 모드는 연결한 장비에 맞게 조정한다.
+
+```bash
+ros2 topic hz /front_camera/image_raw
+ros2 topic hz /rear_camera/image_raw
+```
+
+Picamera2 직접 연결 방식도 지원하며, 동일한 카메라를 사용하는 드라이버와 동시에 실행하지 않는다.
 
 시스템 카메라 스택과 Picamera2를 설치한 장비에서 실행한다. Picamera2는 `uv` 의존성에 포함되어 있지 않다.
 

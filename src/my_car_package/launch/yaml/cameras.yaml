@@ -1,0 +1,33 @@
+/front_camera:
+  ros__parameters:
+    camera: 0
+    sensor_mode: '2028:1520'
+    width: 640
+    height: 480
+    format: 'RGB888'
+    frame_id: camera
+    FrameDurationLimits:
+    - 41666
+    - 50000
+    role: viewfinder
+    camera_info_url: ''
+    use_sim_time: false
+    AeEnable: true
+
+/rear_camera:
+  ros__parameters:
+    camera: 1
+    sensor_mode: '2028:1520'
+    width: 640
+    height: 480
+    format: 'RGB888'
+    frame_id: camera
+    FrameDurationLimits:
+    - 41666
+    - 50000
+    role: viewfinder
+    camera_info_url: ''
+    use_sim_time: false
+    AeEnable: true
+
+
