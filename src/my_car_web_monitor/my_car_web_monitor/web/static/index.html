@@ -48,8 +48,8 @@
       .status-list { font-size:.78rem; color:var(--muted); display:grid; gap:5px; overflow-wrap:anywhere; }
       .card-error:not(:empty),#stream-error:not(:empty) { padding:9px 10px; background:#fff0f0; font-size:.83rem; }
       .lidar-panel { display:flex; flex-direction:column; }
-      .lidar-placeholder { min-height:160px; display:grid; place-content:center; text-align:center; gap:8px; padding:12px 0; color:var(--muted); }
-      .lidar-placeholder strong { font-size:1rem; color:var(--text); } .lidar-placeholder p { max-width:240px; font-size:.85rem; line-height:1.7; }
+      .lidar-canvas { display:block; width:100%; height:auto; aspect-ratio:1; max-height:58vh; }
+      #lidar-status { font-size:.75rem; }
       .view-note { margin-top:10px; font-size:.75rem; color:var(--muted); }
       .control-panel { margin-top:10px; padding-top:8px; border-top:1px solid var(--line); display:grid; grid-template-columns:auto minmax(260px,1fr) auto; align-items:center; gap:8px 16px; }
       #control-state { font-size:.8rem; }
@@ -61,7 +61,7 @@
       .control-details { grid-column:1/-1; border-top:1px solid var(--line); }
       #control-error:not(:empty) { grid-column:1/-1; } .keyboard-note { font-size:.75rem; color:var(--muted); }
       @media(max-width:1000px) { .control-panel { grid-template-columns:1fr 2fr; } .driving-actions { grid-column:1/-1; justify-content:space-between; } }
-      @media(max-width:680px) { .layout { grid-template-columns:1fr; } .control-panel { grid-template-columns:1fr; } .stream-grid { grid-template-columns:1fr; } header { flex-wrap:wrap; } .lidar-placeholder { min-height:120px; } }
+      @media(max-width:680px) { .layout { grid-template-columns:1fr; } .control-panel { grid-template-columns:1fr; } .stream-grid { grid-template-columns:1fr; } header { flex-wrap:wrap; } }
     </style>
   </head>
   <body>
@@ -86,9 +86,9 @@
           <p id="stream-error" class="bad" role="status"></p>
         </section>
         <section class="panel lidar-panel" aria-label="주변 라이다">
-          <div class="panel-head"><h2>주변 공간</h2><span class="muted">라이다 · 미연결</span></div>
-          <div class="lidar-placeholder"><strong>라이다 연결 예정</strong><p>차량 주변 장애물을 표시할 영역입니다. 현재는 스캔 데이터를 수신하지 않습니다.</p></div>
-          <p class="view-note">카메라 밖 장애물과 주변 간격 확인용</p>
+          <div class="panel-head"><h2>주변 공간</h2><span id="lidar-status" class="muted" role="status">스캔 연결 중</span></div>
+          <canvas id="lidar-canvas" class="lidar-canvas" aria-label="7미터 이내 라이다 스캔. 위쪽은 전방 양의 x축, 오른쪽은 양의 y축입니다."></canvas>
+          <p class="view-note">반경 7m · 위쪽 전방(+x) · 오른쪽 +y</p>
         </section>
       </div>
       <section class="panel control-panel" aria-label="주행 제어">
@@ -120,6 +120,7 @@
       </article>
     </template>
 
+    <script src="/static/lidar.js"></script>
     <script src="/static/motor-status.js"></script>
     <script>
       const streamGrid = document.getElementById("stream-grid");

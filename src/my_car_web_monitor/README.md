@@ -263,7 +263,7 @@ src/my_car_web_monitor/.venv/bin/python -m pytest src/my_car_web_monitor/test/te
 
 ## Driving UI
 
-The light, flat layout gives the camera half the available desktop width beside a reserved lidar area. Video height follows its source ratio, capped at 58% of the viewport height. Camera videos preserve their full aspect ratio without cropping. All camera streams use equal-size 4:3 viewports in a two-column grid, with source aspect ratios preserved inside each viewport. Narrow screens use one column. Lidar is a clearly labelled placeholder only: this UI change does not subscribe to scans or send scan data.
+The light, flat layout gives the camera half the available desktop width beside a live lidar view. Video height follows its source ratio, capped at 58% of the viewport height. Camera videos preserve their full aspect ratio without cropping. All camera streams use equal-size 4:3 viewports in a two-column grid, with source aspect ratios preserved inside each viewport. Narrow screens use one column. The lidar view automatically connects to `/ws/scan` and plots valid `/scan` returns within 7 m, with +x forward/up and +y right. No spatial downsampling or line interpolation is applied.
 
 A thin top status bar shows vehicle state, Driver A/B voltage, status freshness, control connection buttons and server health. Active system/motor error summaries remain visible immediately below it. Motor telemetry is located below the driving controls. Expand `차량 상세 · 모터 / 오류 / 통신` for full telemetry and raw messages. Each camera footer shows its name, compact connection/ICE/video status, and small connect/disconnect buttons. Source types and topic names are omitted. Control transport details remain collapsible. Speed settings, control connection and Stop remain directly available below the views. Monitoring does not automatically connect vehicle control. On narrow screens, camera and lidar areas stack vertically.
 
@@ -286,3 +286,11 @@ MOTOR_UI_BROWSER_URL=http://127.0.0.1:9229 src/my_car_web_monitor/.venv/bin/pyth
 ```
 
 Without `MOTOR_UI_BROWSER_URL`, browser tests skip. API tests run independently. Rebuild the web package and restart the web monitor after updating its installed static assets; reload the browser page.
+
+## Lidar scan stream
+
+The web node subscribes to `sensor_msgs/msg/LaserScan` on `/scan` with best-effort, volatile, keep-last depth 1 QoS. Valid finite positive distances inside the sensor's declared range and at most 7 m are retained, including points exactly at 7 m. Each browser receives the newest complete scan at up to 10 Hz; intermediate scans are replaced rather than queued. Filtering preserves original angle indices, and distances are rounded to millimetres. The axes refer directly to the scan frame; no TF transform or mounting offset is applied.
+
+`/ws/scan` is read-only and independent of vehicle control. Each binary message is little endian: a 32-byte header (`<4sIfffdf`: `LDR1`, original ray count, angle_min, angle_increment, 7 m radius, ROS header timestamp in seconds, server receive age in seconds), followed by six-byte `<IH` records (uint32 original index, uint16 distance in mm). A uint32 index preserves large scans without truncation. Each packet replaces all previous points, including when the filtered scan is empty. The ROS stamp is carried as metadata; freshness uses monotonic server receive age and browser elapsed time, independent of ROS clock changes.
+
+The browser draws 2 px radius points and metre rings, with only a direction marker at the scan origin. It does not depict a calibrated vehicle footprint. After one second without a fresh received scan, points are cleared and a delayed-data label appears. A closed socket clears points immediately and retries after one second. Slow sends time out after two seconds. The ROS subscription is destroyed during web application shutdown.

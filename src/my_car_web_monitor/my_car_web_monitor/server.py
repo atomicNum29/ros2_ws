@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from rclpy.node import Node
 
 from my_car_web_monitor.config import Settings
+from my_car_web_monitor.lidar import LidarStream
 from my_car_web_monitor.control import RosControlBridge
 from my_car_web_monitor.streams import StreamRegistry
 
@@ -33,15 +34,19 @@ def create_app(node: Node, settings: Settings) -> FastAPI:
     stream_registry: StreamRegistry | None = None
     control_bridge: RosControlBridge | None = None
     active_control_socket: WebSocket | None = None
+    lidar_stream: LidarStream | None = None
 
     @app.on_event("startup")
     async def startup_event() -> None:
-        nonlocal stream_registry, control_bridge
+        nonlocal stream_registry, control_bridge, lidar_stream
         stream_registry = StreamRegistry(settings, node)
         control_bridge = RosControlBridge(node, settings)
+        lidar_stream = LidarStream(node)
 
     @app.on_event("shutdown")
     async def shutdown_event() -> None:
+        if lidar_stream is not None:
+            lidar_stream.close()
         if control_bridge is not None:
             await control_bridge.stop()
         if stream_registry is not None:
@@ -123,6 +128,44 @@ def create_app(node: Node, settings: Settings) -> FastAPI:
             logger.info("Status websocket disconnected or send timed out")
         finally:
             stream.unsubscribe(client)
+            sender.cancel()
+            receiver.cancel()
+            await asyncio.gather(sender, receiver, return_exceptions=True)
+            try:
+                await websocket.close()
+            except (RuntimeError, OSError):
+                pass
+
+    @app.websocket("/ws/scan")
+    async def scan_ws(websocket: WebSocket) -> None:
+        await websocket.accept()
+        if lidar_stream is None:
+            await websocket.close(code=1011)
+            return
+
+        async def send_scans() -> None:
+            revision = 0
+            while True:
+                revision, packet = lidar_stream.packet_after(revision)
+                if packet is not None:
+                    await asyncio.wait_for(websocket.send_bytes(packet), timeout=2.0)
+                # Preserve every valid ray in a scan; skip old scans, never queue them.
+                await asyncio.sleep(0.1)
+
+        async def receive_disconnect() -> None:
+            while True:
+                if (await websocket.receive())["type"] == "websocket.disconnect":
+                    return
+
+        sender = asyncio.create_task(send_scans())
+        receiver = asyncio.create_task(receive_disconnect())
+        try:
+            done, _ = await asyncio.wait({sender, receiver}, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                task.result()
+        except (WebSocketDisconnect, TimeoutError, RuntimeError, OSError):
+            logger.info("Scan websocket disconnected or send timed out")
+        finally:
             sender.cancel()
             receiver.cancel()
             await asyncio.gather(sender, receiver, return_exceptions=True)
