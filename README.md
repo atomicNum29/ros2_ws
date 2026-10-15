@@ -8,7 +8,7 @@
 
 | 패키지 | 역할 | 빌드 방식 |
 | --- | --- | --- |
-| [`my_car_package`](src/my_car_package) | 차체 URDF/Xacro·메시, TF, RViz, 전·후방 카메라 및 bag/SLAM 실험 launch | `ament_cmake` |
+| [`my_car_package`](src/my_car_package) | 차체 URDF/Xacro·메시, TF, RViz, 센서·모터 통합 bringup 및 bag/SLAM 실험 launch | `ament_cmake` |
 | [`my_car_motor_bridge`](src/my_car_motor_bridge/README.md) | `/cmd_vel` → MCU 시리얼 명령, 모터 상태 수신, CAN 진단 모드 | `ament_python` |
 | [`my_car_web_monitor`](src/my_car_web_monitor/README.md) | FastAPI 웹 UI, WebRTC 영상, ROS 원격 조종, 모터 상태 대시보드 | `ament_python` |
 
@@ -46,7 +46,7 @@ T265와 YDLidar X4-Pro 드라이버는 별도 센서 워크스페이스의 `../.
 
 RealSense 저장소에는 메시지 패키지 `realsense2_camera_msgs`와 모델 패키지 `realsense2_description`도 포함된다. X4-Pro 설정은 드라이버의 `params/X4-Pro.yaml`에 있으며, 현재 `params/ydlidar.yaml`에도 같은 장비 설정이 적용되어 있다. 주요 값은 포트 `/dev/ttyUSB0`, baudrate `128000`, 프레임 `laser_frame`이다.
 
-T265와 X4-Pro 센서 드라이버는 기존 워크스페이스에서 유지하고 차량별 센서 설정·TF·통합 launch는 이 워크스페이스에서 관리하는 방향이다. 현재 통합 launch는 아직 없으며, 다른 장비에 환경을 재현할 때는 드라이버 버전뿐 아니라 로컬 수정과 SDK 버전도 함께 보존해야 한다.
+T265와 X4-Pro 센서 드라이버는 기존 워크스페이스에서 유지하고, 센서·모터 통합 실행은 이 워크스페이스의 `my_car_package/launch/bringup.launch.py`에서 관리한다. 다른 장비에 환경을 재현할 때는 드라이버 버전뿐 아니라 로컬 수정과 SDK 버전도 함께 보존해야 한다.
 
 기존 센서 워크스페이스의 `my_car_bringup`은 `my_car_description` 모델을 함께 실행하고, `bringup.launch.py`는 SLAM도 실행한다. 현재 `my_car_package` 모델 launch와 함께 실행하면 차체 TF를 중복 발행할 수 있으므로, 아래 예제에서는 센서 드라이버만 각각 실행한다.
 
@@ -131,6 +131,34 @@ source ../../robot_ws/ros2_ws/install/local_setup.bash
 source src/my_car_web_monitor/.venv/bin/activate
 source install/local_setup.bash
 ```
+
+### 센서·모터 통합 실행 (bringup)
+
+[`bringup.launch.py`](src/my_car_package/launch/bringup.launch.py)는 전·후방 Raspberry Pi 카메라, YDLidar, T265, MCU 모터 브리지를 한 번에 실행한다. 앞의 환경 준비 및 빌드 절차를 완료하고, 센서 워크스페이스와 현재 워크스페이스 환경을 모두 불러온 상태에서 실행한다. launch를 새로 추가한 뒤에는 `my_car_package`를 다시 빌드한다.
+
+```bash
+colcon build --symlink-install --packages-select my_car_package
+source install/local_setup.bash
+ros2 launch my_car_package bringup.launch.py
+```
+
+| 구성 요소 | 포함하는 launch | 적용 설정 |
+| --- | --- | --- |
+| 전·후방 카메라 | `my_car_package/rpi_cameras.launch.py` | `launch/yaml/cameras.yaml` 사용, `/front_camera/image_raw`·`/rear_camera/image_raw` 발행 |
+| YDLidar X4-Pro | `ydlidar_ros2_driver/ydlidar_launch.py` | 드라이버 기본 `params/ydlidar.yaml` 사용. `X4-Pro.yaml`을 직접 지정하지 않음 |
+| T265 | `realsense2_camera/rs_launch.py` | `device_type:=t265`, `enable_accel:=true`, `enable_gyro:=true` 전달 |
+| 모터 브리지 | `my_car_motor_bridge/motor_bridge.launch.py` | `config/motor_bridge.yaml` 및 하위 launch의 기본값 사용 |
+
+`camera_ros`, `ydlidar_ros2_driver`, `realsense2_camera`, `my_car_motor_bridge`가 실행 환경에서 검색되어야 하며, 연결한 장치에 맞게 카메라 인덱스와 시리얼 포트 설정을 확인한다. 현재 bringup에는 구성 요소별 실행 여부를 선택하는 인자가 없으므로, 일부만 실행하려면 아래 개별 실행 명령을 사용한다. 이미 실행 중인 동일 드라이버나 모터 브리지는 중복 실행하지 않는다.
+
+웹 모니터, 차체 모델·TF, RViz, SLAM은 별도로 실행한다. bringup 실행 후 별도 터미널에 동일한 환경을 불러오고 웹 모니터를 연결할 수 있다.
+
+```bash
+CAMERA_STREAMS=front:ros_image:/front_camera/image_raw,rear:ros_image:/rear_camera/image_raw,t265_1:ros_image:/camera/fisheye1/image_raw,t265_2:ros_image:/camera/fisheye2/image_raw \
+  ros2 run my_car_web_monitor web_monitor_node
+```
+
+브라우저에서 `http://<실행 장비 IP>:8443`에 접속하면 전·후방 영상과 모터 상태를 확인할 수 있다. 차체 모델은 아래 `description.launch.py` 또는 `display.launch.py` 중 하나로 실행한다.
 
 ### 카메라·MCU 없이 웹 화면 확인
 
@@ -331,7 +359,7 @@ python -m colcon test-result --verbose
 
 ## 현재 범위와 관련 문서
 
-현재 영상 소스는 `picamera2`, `synthetic`, `ros_image`, `ros_compressed`를 지원한다. 웹·모터·센서·SLAM을 한 번에 실행하는 통합 launch는 없으므로 필요한 구성 요소를 각각 실행한다.
+현재 영상 소스는 `picamera2`, `synthetic`, `ros_image`, `ros_compressed`를 지원한다. `bringup.launch.py`로 전·후방 카메라·T265·LiDAR·모터 브리지를 함께 실행할 수 있으며, 웹 모니터·차체 모델·RViz·SLAM은 별도로 실행한다.
 
 - [모터 브리지 프로토콜·파라미터·진단 가이드](src/my_car_motor_bridge/README.md)
 - [웹 모니터 상세 문서](src/my_car_web_monitor/README.md): 초기 설계 내용도 포함하므로 실제 설정은 코드와 이 문서의 기본값을 확인한다.
