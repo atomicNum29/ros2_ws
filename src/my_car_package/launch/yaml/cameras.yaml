@@ -1,6 +1,6 @@
 /front_camera:
   ros__parameters:
-    camera: 0
+    camera: 1
     sensor_mode: '2028:1520'
     width: 640
     height: 480
@@ -16,7 +16,7 @@
 
 /rear_camera:
   ros__parameters:
-    camera: 1
+    camera: 0
     sensor_mode: '2028:1520'
     width: 640
     height: 480
