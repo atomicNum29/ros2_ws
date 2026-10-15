@@ -3,7 +3,7 @@
   "use strict";
   const STALE_SECONDS = 1.0;
   const STATES = [
-    ["출력 비활성", "DISABLED", "neutral"], ["출력 허용", "ENABLED", "ok"],
+    ["출력 비활성", "DISABLED", "neutral"], ["출력 활성", "ENABLED", "ok"],
     ["명령 시간 초과 정지", "TIMEOUT_STOP", "warn"], ["비상 정지", "ESTOP", "bad"],
     ["시스템 고장", "FAULT", "bad"], ["부팅 중", "BOOTING", "neutral"],
     ["보정 중", "CALIBRATION", "neutral"],
@@ -100,7 +100,7 @@
         const driver = schema === "v2" ? status.drivers?.[key] : null;
         const valid = fresh && driver?.valid === true && Boolean(validity & (1 << (index + 4)))
           && integer(driver.voltage_mv, 0, 65535);
-        return { key, valid, voltage: valid ? `${number(driver.voltage_mv / 1000, 2)} V` : "—",
+        return { key, valid, voltage: valid ? `${number(driver.voltage_mv / 1000, 2)}V` : "—",
           label: schema === "legacy" ? "개별 전압 미지원" : valid ? "유효" : "현재 전압 확인 불가" };
       }),
     };
@@ -119,20 +119,28 @@
     root.innerHTML = `
       <div class="panel-head"><div><h2>차량 상태</h2><p class="muted motor-subtitle">MCU · 드라이버 · 네 바퀴</p></div>
         <span class="status-badge" data-role="connection" role="status">상태 수신 대기</span></div>
-      <p class="motor-notice" data-role="notice"></p>
+
       <div class="motor-summary">
-        <div class="motor-summary-item"><span class="muted">MCU 운용 상태</span><strong data-role="mcu">수신 대기</strong><small data-role="mcu-detail"></small></div>
-        <div class="motor-summary-item"><span class="muted">드라이버 A <small>LF · RR</small></span><strong data-role="voltage-a">—</strong><small data-role="voltage-a-valid"></small></div>
-        <div class="motor-summary-item"><span class="muted">드라이버 B <small>RF · LR</small></span><strong data-role="voltage-b">—</strong><small data-role="voltage-b-valid"></small></div>
+        <div class="motor-summary-item"><strong data-role="mcu">수신 대기</strong><small data-role="mcu-detail"></small></div>
+        <div class="motor-summary-item"><span class="muted">A:</span><strong data-role="voltage-a">—</strong><small data-role="voltage-a-valid"></small></div>
+        <div class="motor-summary-item"><span class="muted">B:</span><strong data-role="voltage-b">—</strong><small data-role="voltage-b-valid"></small></div>
       </div>
+      <p class="driving-alert" data-role="driving-alert" role="status"></p>
+      <details class="vehicle-details"><summary>차량 상세 · 모터 / 오류 / 통신</summary>
+      <p class="motor-notice" data-role="notice"></p>
       <div class="motor-columns"><div><div class="vehicle-front">↑ 차량 앞쪽</div><div class="wheel-grid" data-role="wheels"></div></div>
         <section class="system-diagnostics" aria-label="시스템 오류"><div class="panel-head"><h3>시스템 오류 / 진단</h3><span data-role="error-count" class="status-badge"></span></div>
           <p class="muted motor-subtitle" data-role="error-context"></p><ul class="error-list" data-role="errors"></ul>
           <details><summary>시스템 비트 전체 보기 <span data-role="error-raw"></span></summary><div class="bit-table" data-role="bits"></div></details>
         </section>
       </div>
-      <details class="raw-status"><summary>수신 원문 / 프로토콜 정보</summary><pre data-role="raw"></pre></details>`;
+      <details class="raw-status"><summary>수신 원문 / 프로토콜 정보</summary><pre data-role="raw"></pre></details></details>`;
     const refs = Object.fromEntries([...root.querySelectorAll("[data-role]")].map(node => [node.dataset.role, node]));
+    // Reuse the same live telemetry nodes in the compact top status bar.
+    const summary = document.getElementById("vehicle-summary");
+    if (summary) summary.append(refs.connection, root.querySelector(".motor-summary"));
+    const warnings = document.getElementById("driving-warnings");
+    if (warnings) warnings.append(refs["driving-alert"]);
     const cards = new Map();
     for (const [key, label, driver] of WHEELS) {
       const card = element("article", "wheel-card");
@@ -184,6 +192,16 @@
         refs[`voltage-${driver.key}-valid`].textContent = driver.label;
         tone(refs[`voltage-${driver.key}`], driver.valid ? "ok" : "neutral");
       }
+      const activeSystem = view.errors?.filter(bit => bit.active) || [];
+      const motorAlerts = view.wheels.filter(wheel => wheel.bits?.some(bit => bit.active))
+        .map(wheel => `${wheel.key.toUpperCase()} 모터 오류`);
+      const alerts = [...activeSystem.map(bit => bit.label), ...motorAlerts];
+      const prefix = view.fresh ? "" : "마지막 수신: ";
+      refs["driving-alert"].textContent = alerts.length ? prefix + alerts.join(" · ")
+        : !view.fresh ? refs.connection.textContent : !view.errors ? "오류 정보 확인 불가" : "";
+      refs["driving-alert"].hidden = !refs["driving-alert"].textContent;
+      tone(refs["driving-alert"], !view.fresh ? "warn"
+        : activeSystem.some(bit => bit.tone === "bad") || motorAlerts.length ? "bad" : "warn");
       const nextErrorSignature = JSON.stringify([view.schema, view.fresh, view.rawError]);
       if (nextErrorSignature !== errorSignature) {
         errorSignature = nextErrorSignature;

@@ -1,321 +1,122 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>my_car_web_monitor</title>
     <link rel="stylesheet" href="/static/motor-status.css" />
     <style>
-      :root {
-        color-scheme: dark;
-        --bg: #101114;
-        --panel: #1a1d22;
-        --panel-2: #20242b;
-        --text: #eef0f4;
-        --muted: #a5adba;
-        --line: #333945;
-        --accent: #39b980;
-        --danger: #f05252;
-        --warn: #eab308;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-
-      main {
-        width: min(1280px, 100%);
-        margin: 0 auto;
-        padding: 20px;
-      }
-
-      header {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        align-items: end;
-        margin-bottom: 16px;
-      }
-
-      h1,
-      h2,
-      p {
-        margin: 0;
-      }
-
-      h1 {
-        font-size: 1.35rem;
-        font-weight: 720;
-      }
-
-      h2 {
-        font-size: 1rem;
-      }
-
-      .muted {
-        color: var(--muted);
-      }
-
-      .layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 340px;
-        gap: 16px;
-        align-items: start;
-      }
-
-      .panel,
-      .stream-card {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-      }
-
-      .panel {
-        padding: 14px;
-      }
-
-      .panel-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 12px;
-      }
-
-      .stream-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 14px;
-      }
-
-      .stream-card {
-        overflow: hidden;
-      }
-
-      .stream-video {
-        width: 100%;
-        aspect-ratio: 16 / 9;
-        display: grid;
-        place-items: center;
-        background: #050608;
-      }
-
-      video {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        background: #000;
-      }
-
-      .stream-info,
-      .stream-actions,
-      .status-list {
-        padding: 12px;
-      }
-
-      .stream-actions,
-      .row {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        align-items: center;
-      }
-
-      .status-list {
-        display: grid;
-        gap: 7px;
-        color: var(--muted);
-        font-size: 0.9rem;
-        border-top: 1px solid var(--line);
-      }
-
-      button {
-        min-height: 38px;
-        padding: 0 13px;
-        border: 1px solid transparent;
-        border-radius: 6px;
-        background: var(--panel-2);
-        color: var(--text);
-        font: inherit;
-        font-weight: 650;
-        cursor: pointer;
-      }
-
-      button:hover {
-        border-color: #596170;
-      }
-
-      button.primary {
-        background: var(--accent);
-        color: #052114;
-      }
-
-      button.danger {
-        background: var(--danger);
-        color: #fff;
-      }
-
-      .speed-controls {
-        display: grid;
-        gap: 10px;
-        margin: 14px 0;
-        padding: 12px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--panel-2);
-      }
-
-      .speed-control {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 6px 12px;
-        align-items: center;
-        font-size: 0.9rem;
-      }
-
-      .speed-control input {
-        grid-column: 1 / -1;
-        width: 100%;
-      }
-
-      .speed-value {
-        min-width: 3.5rem;
-        text-align: right;
-        color: var(--accent);
-        font-variant-numeric: tabular-nums;
-      }
-
-      .teleop-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-        margin: 12px 0;
-      }
-
-      .teleop-grid button {
-        aspect-ratio: 1.25 / 1;
-        font-size: 1.08rem;
-      }
-
-      .span-3 {
-        grid-column: span 3;
-      }
-
-      .ok {
-        color: var(--accent);
-      }
-
-      .bad {
-        color: var(--danger);
-      }
-
-      .warn {
-        color: var(--warn);
-      }
-
-      @media (max-width: 860px) {
-        main {
-          padding: 12px;
-        }
-
-        header,
-        .layout {
-          display: grid;
-          grid-template-columns: 1fr;
-        }
-      }
+      :root { color-scheme: light; --bg:#f5f7f8; --panel:#f5f7f8; --panel-2:#eef2f4;
+        --text:#1d2b39; --muted:#566779; --line:#d7e0e7; --accent:#137755; --danger:#bc303b; --warn:#946000; }
+      * { box-sizing:border-box; }
+      body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,"Noto Sans KR",sans-serif; }
+      main { margin:auto; padding:0 12px 12px; }
+      h1,h2,p { margin:0; } h1 { font-size:1.1rem; } h2 { font-size:1rem; }
+      header,.panel-head,.row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      header.status-bar { min-height:38px; padding:5px 0; margin-bottom:8px; border-bottom:1px solid var(--line); justify-content:flex-start; gap:16px; flex-wrap:wrap; font-size:.75rem; }
+      .status-bar h1 { font-size:.85rem; white-space:nowrap; }
+      .status-bar #health { margin-left:auto; }
+      #vehicle-summary { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+      #vehicle-summary .motor-summary { display:flex; flex-wrap:wrap; gap:12px; margin:0; }
+      #vehicle-summary .motor-summary-item { display:flex; align-items:baseline; gap:5px; padding:0; }
+      #vehicle-summary .motor-summary-item strong { font-size:.78rem; }
+      #vehicle-summary .motor-summary-item > small, #vehicle-summary .motor-summary-item span small { display:none; }
+      #vehicle-summary [data-tone="ok"] { color:var(--accent); }
+      #vehicle-summary [data-tone="warn"], #driving-warnings [data-tone="warn"] { color:var(--warn); }
+      #vehicle-summary [data-tone="bad"], #driving-warnings [data-tone="bad"] { color:var(--danger); }
+      #vehicle-summary [data-tone="neutral"] { color:var(--muted); }
+      #vehicle-summary .status-badge { border:0; padding:0; border-radius:0; font-size:.75rem; }
+      #driving-warnings:empty { display:none; }
+      #driving-warnings .driving-alert { margin:0 0 8px; padding:4px 0; border-radius:0; background:transparent; } .row { justify-content:flex-start; flex-wrap:wrap; gap:8px; }
+      .muted { color:var(--muted); } .ok { color:var(--accent); } .bad { color:var(--danger); } .warn { color:var(--warn); }
+      .panel { min-width:0; padding:0; border:0; border-radius:0; background:transparent; }
+      .panel-head { margin-bottom:6px; } .layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; align-items:start; }
+      button { min-height:30px; padding:4px 9px; border:1px solid var(--line); border-radius:3px; background:var(--panel); color:var(--text); font:inherit; font-size:.85rem; font-weight:650; cursor:pointer; }
+      button:hover { background:#e8eef2; } button:focus-visible,summary:focus-visible,input:focus-visible { outline:3px solid #257ab4; outline-offset:3px; }
+      button.primary { background:var(--accent); border-color:var(--accent); color:white; } button.danger { background:var(--danger); border-color:var(--danger); color:white; }
+      summary { cursor:pointer; color:var(--muted); font-size:.85rem; padding:5px 0; }
+      .stream-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+      .stream-card { min-width:0; border:0; border-radius:0; background:transparent; }
+      .stream-video { position:relative; aspect-ratio:4/3; max-height:58vh; background:#0b1016; line-height:0; }
+      video { display:block; width:100%; height:100%; object-fit:contain; background:#0b1016; }
+      .stream-info { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:4px 0; font-size:.8rem; }
+      .stream-title { margin-right:auto; }
+      .stream-connection { display:flex; align-items:center; gap:5px; flex-wrap:wrap; font-size:.73rem; color:var(--muted); }
+      .stream-connection > span + span::before { content:"·"; color:var(--muted); margin-right:5px; }
+      .stream-actions { display:flex; gap:4px; }
+      .stream-actions button { min-height:24px; padding:2px 6px; font-size:.72rem; }
+      .status-list { font-size:.78rem; color:var(--muted); display:grid; gap:5px; overflow-wrap:anywhere; }
+      .card-error:not(:empty),#stream-error:not(:empty) { padding:9px 10px; background:#fff0f0; font-size:.83rem; }
+      .lidar-panel { display:flex; flex-direction:column; }
+      .lidar-placeholder { min-height:160px; display:grid; place-content:center; text-align:center; gap:8px; padding:12px 0; color:var(--muted); }
+      .lidar-placeholder strong { font-size:1rem; color:var(--text); } .lidar-placeholder p { max-width:240px; font-size:.85rem; line-height:1.7; }
+      .view-note { margin-top:10px; font-size:.75rem; color:var(--muted); }
+      .control-panel { margin-top:10px; padding-top:8px; border-top:1px solid var(--line); display:grid; grid-template-columns:auto minmax(260px,1fr) auto; align-items:center; gap:8px 16px; }
+      #control-state { font-size:.8rem; }
+      .speed-controls { display:flex; flex-wrap:wrap; gap:8px 16px; }
+      .speed-control { display:grid; grid-template-columns:1fr auto; flex:1; min-width:160px; gap:5px 12px; font-size:.8rem; }
+      .speed-control input { grid-column:1/-1; width:100%; accent-color:var(--accent); } .speed-value { font-variant-numeric:tabular-nums; }
+      .driving-actions { display:flex; align-items:center; gap:12px; } #stop-control { min-width:110px; min-height:44px; font-size:1.05rem; }
+      .teleop-grid { display:grid; grid-template-columns:repeat(3,38px); gap:4px; } .teleop-grid button { padding:0; min-height:30px; }
+      .control-details { grid-column:1/-1; border-top:1px solid var(--line); }
+      #control-error:not(:empty) { grid-column:1/-1; } .keyboard-note { font-size:.75rem; color:var(--muted); }
+      @media(max-width:1000px) { .control-panel { grid-template-columns:1fr 2fr; } .driving-actions { grid-column:1/-1; justify-content:space-between; } }
+      @media(max-width:680px) { .layout { grid-template-columns:1fr; } .control-panel { grid-template-columns:1fr; } .stream-grid { grid-template-columns:1fr; } header { flex-wrap:wrap; } .lidar-placeholder { min-height:120px; } }
     </style>
   </head>
   <body>
     <main>
-      <header>
-        <div>
-          <h1>my_car_web_monitor</h1>
-          <p class="muted">Camera streams and ROS vehicle control</p>
+      <header class="status-bar" aria-label="주행 상태">
+        <h1>원격 주행</h1>
+        <div id="vehicle-summary" aria-label="차량 요약"></div>
+        <div class="row" aria-label="주행 제어 연결">
+          <span id="control-state" class="muted" role="status">제어: idle</span>
+          <button id="connect-control" class="primary">제어 연결</button>
+          <button id="disconnect-control">연결 해제</button>
         </div>
-        <div id="health" class="muted">server: checking</div>
+        <div id="health" class="muted" role="status">서버 확인 중</div>
       </header>
-
-      <section id="motor-dashboard" class="panel motor-dashboard" lang="ko" aria-label="차량 및 모터 상태"></section>
-
+      <div id="driving-warnings"></div>
       <div class="layout">
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Streams</h2>
-            <div class="row">
-              <button id="start-all" class="primary">Start All</button>
-              <button id="stop-all">Stop All</button>
-            </div>
-          </div>
+        <section class="panel" aria-label="주행 카메라">
+          <div class="panel-head"><h2>카메라</h2><div class="row">
+            <button id="start-all" class="primary">영상 연결</button><button id="stop-all">영상 끊기</button>
+          </div></div>
           <div id="stream-grid" class="stream-grid"></div>
-          <p id="stream-error" class="bad"></p>
+          <p id="stream-error" class="bad" role="status"></p>
         </section>
-
-        <aside class="panel">
-          <div class="panel-head">
-            <h2>Control</h2>
-            <div id="control-state" class="muted">idle</div>
-          </div>
-          <div class="row">
-            <button id="connect-control" class="primary">Connect</button>
-            <button id="disconnect-control">Disconnect</button>
-          </div>
-          <div class="speed-controls">
-            <label class="speed-control" for="linear-speed">
-              <span>Linear speed</span>
-              <output id="linear-speed-value" class="speed-value">0.30 m/s</output>
-              <input id="linear-speed" type="range" min="0" max="1" step="0.05" value="0.3" />
-            </label>
-            <label class="speed-control" for="angular-speed">
-              <span>Angular speed</span>
-              <output id="angular-speed-value" class="speed-value">1.00 rad/s</output>
-              <input id="angular-speed" type="range" min="0" max="3" step="0.1" value="1" />
-            </label>
-          </div>
-          <div class="teleop-grid">
-            <div></div>
-            <button data-command="forward">W</button>
-            <div></div>
-            <button data-command="left">A</button>
-            <button id="stop-control" class="danger">Stop</button>
-            <button data-command="right">D</button>
-            <div></div>
-            <button data-command="backward">S</button>
-            <div></div>
-          </div>
-          <div class="status-list">
-            <div id="cmd-status">cmd: linear=0.00 angular=0.00</div>
-            <div id="topic-status">topic: loading</div>
-            <div id="control-error" class="bad"></div>
-          </div>
-        </aside>
+        <section class="panel lidar-panel" aria-label="주변 라이다">
+          <div class="panel-head"><h2>주변 공간</h2><span class="muted">라이다 · 미연결</span></div>
+          <div class="lidar-placeholder"><strong>라이다 연결 예정</strong><p>차량 주변 장애물을 표시할 영역입니다. 현재는 스캔 데이터를 수신하지 않습니다.</p></div>
+          <p class="view-note">카메라 밖 장애물과 주변 간격 확인용</p>
+        </section>
       </div>
+      <section class="panel control-panel" aria-label="주행 제어">
+        <h2>주행 제어</h2>
+        <div class="speed-controls">
+          <label class="speed-control" for="linear-speed"><span>직진 속도</span><output id="linear-speed-value" class="speed-value">0.30 m/s</output><input id="linear-speed" type="range" min="0" max="1" step="0.05" value="0.3" /></label>
+          <label class="speed-control" for="angular-speed"><span>회전 속도</span><output id="angular-speed-value" class="speed-value">1.00 rad/s</output><input id="angular-speed" type="range" min="0" max="3" step="0.1" value="1" /></label>
+        </div>
+        <div class="driving-actions"><div><div class="teleop-grid">
+          <span></span><button data-command="forward" aria-label="전진 (W)">W</button><span></span>
+          <button data-command="left" aria-label="좌회전 (A)">A</button><button data-command="backward" aria-label="후진 (S)">S</button><button data-command="right" aria-label="우회전 (D)">D</button>
+        </div><span class="keyboard-note">WASD / 방향키</span></div><button id="stop-control" class="danger">정지</button></div>
+        <div id="control-error" class="bad" role="status"></div>
+        <details class="control-details"><summary>제어 통신 상세</summary><div class="status-list"><div id="cmd-status">cmd: linear=0.00 angular=0.00</div><div id="topic-status">topic: loading</div></div></details>
+      </section>
+      <section id="motor-dashboard" class="panel motor-dashboard" lang="ko" aria-label="차량 및 모터 상태"></section>
     </main>
-
     <template id="stream-template">
       <article class="stream-card">
         <div class="stream-video"><video autoplay playsinline muted></video></div>
         <div class="stream-info">
           <strong class="stream-title"></strong>
-          <div class="stream-meta muted"></div>
+          <div class="stream-connection" role="status" aria-label="영상 연결 상태">
+            <span class="connection-status">미연결</span><span class="ice-status">ICE 대기</span><span class="stream-status">영상 대기</span>
+          </div>
+          <div class="stream-actions"><button class="start-stream primary">연결</button><button class="stop-stream">끊기</button></div>
         </div>
-        <div class="stream-actions">
-          <button class="start-stream primary">Start</button>
-          <button class="stop-stream">Stop</button>
-        </div>
-        <div class="status-list">
-          <div class="connection-status">connection: idle</div>
-          <div class="ice-status">ice: idle</div>
-          <div class="stream-status">state: idle</div>
-          <div class="card-error bad"></div>
-        </div>
+        <div class="card-error bad" role="status"></div>
       </article>
     </template>
 
@@ -347,7 +148,15 @@
       let controlTimer = null;
 
       function setText(element, prefix, value, bad = false) {
-        element.textContent = `${prefix}: ${value}`;
+        const labels = {
+          idle:"대기", new:"대기", checking:"확인 중", connecting:"연결 중",
+          connected:"연결됨", completed:"연결됨", disconnected:"끊김",
+          failed:"실패", closed:"종료", interrupted:"중단", streaming:"수신 중", error:"오류",
+        };
+        if (prefix === "connection") element.textContent = value === "idle" ? "미연결" : (labels[value] || value);
+        else if (prefix === "ice") element.textContent = `ICE ${labels[value] || value}`;
+        else if (prefix === "state") element.textContent = `영상 ${labels[value] || value}`;
+        else element.textContent = `${prefix}: ${value}`;
         element.classList.toggle("bad", bad);
         element.classList.toggle("ok", !bad && value !== "idle" && value !== "waiting");
       }
@@ -436,7 +245,6 @@
         const fragment = streamTemplate.content.cloneNode(true);
         const video = fragment.querySelector("video");
         const title = fragment.querySelector(".stream-title");
-        const meta = fragment.querySelector(".stream-meta");
         const startButton = fragment.querySelector(".start-stream");
         const stopButton = fragment.querySelector(".stop-stream");
         const connectionStatus = fragment.querySelector(".connection-status");
@@ -445,7 +253,6 @@
         const cardError = fragment.querySelector(".card-error");
 
         title.textContent = stream.id;
-        meta.textContent = stream.device ? `${stream.source_type} (${stream.device})` : stream.source_type;
 
         const card = {
           stream,
@@ -659,11 +466,11 @@
 
       Promise.all([fetch("/health"), loadStreams(), loadControlConfig()])
         .then(() => {
-          health.textContent = "server: ok";
+          health.textContent = "서버 연결됨";
           health.classList.add("ok");
         })
         .catch((error) => {
-          health.textContent = "server: error";
+          health.textContent = "서버 연결 오류";
           streamError.textContent = error.message;
         });
     </script>

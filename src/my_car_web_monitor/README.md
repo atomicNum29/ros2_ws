@@ -261,6 +261,12 @@ Status API compatibility tests (workspace root, with the web virtual environment
 src/my_car_web_monitor/.venv/bin/python -m pytest src/my_car_web_monitor/test/test_motor_status_api.py
 ```
 
+## Driving UI
+
+The light, flat layout gives the camera half the available desktop width beside a reserved lidar area. Video height follows its source ratio, capped at 58% of the viewport height. Camera videos preserve their full aspect ratio without cropping. All camera streams use equal-size 4:3 viewports in a two-column grid, with source aspect ratios preserved inside each viewport. Narrow screens use one column. Lidar is a clearly labelled placeholder only: this UI change does not subscribe to scans or send scan data.
+
+A thin top status bar shows vehicle state, Driver A/B voltage, status freshness, control connection buttons and server health. Active system/motor error summaries remain visible immediately below it. Motor telemetry is located below the driving controls. Expand `차량 상세 · 모터 / 오류 / 통신` for full telemetry and raw messages. Each camera footer shows its name, compact connection/ICE/video status, and small connect/disconnect buttons. Source types and topic names are omitted. Control transport details remain collapsible. Speed settings, control connection and Stop remain directly available below the views. Monitoring does not automatically connect vehicle control. On narrow screens, camera and lidar areas stack vertically.
+
 ## Vehicle status dashboard
 
 - MCU state and Driver A/B voltage appear above the four motor cards. Voltage is shown in V and current in A; RPM and controller output keep their signs.

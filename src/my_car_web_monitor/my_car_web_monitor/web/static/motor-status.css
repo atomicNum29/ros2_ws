@@ -55,3 +55,34 @@
   .motor-dashboard > .panel-head { align-items: start; flex-wrap: wrap; }
   .wheel-metrics dd { font-size: 1.4rem; }
 }
+
+/* Compact driving summary; full telemetry remains available on demand. */
+.motor-dashboard > .panel-head { margin-bottom: 8px; }
+.motor-dashboard > .panel-head h2 { font-size: .85rem; }
+.motor-dashboard > .panel-head .motor-subtitle { display: none; }
+.motor-summary { margin-bottom: 0; grid-template-columns: 1.5fr 1fr 1fr; border: 0; background: transparent; gap: 16px; }
+.motor-summary-item { padding: 4px 0; background: transparent; gap: 3px; }
+.motor-summary-item > span { font-size: .73rem; }
+.motor-summary-item strong { font-size: 1.05rem; }
+.motor-summary-item > small { display: none; }
+.motor-dashboard:has(.vehicle-details[open]) .motor-summary-item > small { display: block; }
+.motor-dashboard .vehicle-details { border-top: 1px solid var(--line); margin-top: 8px; }
+.driving-alert { font-size: .82rem; line-height: 1.6; margin-top: 8px; padding: 7px 10px; background: #fff5e2; border-radius: 6px; overflow-wrap: anywhere; }
+.driving-alert[data-tone="bad"] { background: #fff0f0; }
+.driving-alert[hidden] { display: none; }
+@media(max-width:560px) {
+  .motor-summary { gap: 8px; }
+  .motor-summary-item:first-child { grid-column: auto; }
+  .motor-summary-item strong { font-size: .9rem; }
+}
+
+/* Flat telemetry rows below the driving controls. */
+.motor-dashboard { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); }
+.motor-dashboard .status-badge { border: 0; border-radius: 0; padding: 0; }
+.motor-dashboard .wheel-grid { gap: 8px 20px; }
+.motor-dashboard .wheel-card { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding: 8px 0; }
+.motor-dashboard .wheel-metrics { margin: 10px 0; }
+.motor-dashboard .error-item { background: transparent; border-radius: 0; padding: 6px 10px; }
+.motor-dashboard .motor-error { background: transparent; padding: 0; border-radius: 0; }
+.motor-dashboard .vehicle-details { margin-top: 0; border-top: 0; }
+.motor-dashboard .system-diagnostics { padding-top: 0; }
