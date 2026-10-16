@@ -27,7 +27,7 @@ All packets use `AA 55 length payload checksum`. Length includes type and exclud
 | --- | --- | --- | --- |
 | `0x01` | 7 | 11 | Velocity command / enter CONTROL |
 | `0x81` | 7 | 11 | Legacy basic status; disabled by default in current MCU |
-| `0x82` | 39 | 43 | System Status v2, 10 Hz in CONTROL |
+| `0x82` | 39 | 43 | System Status v2, 100 Hz in CONTROL |
 | `0x20` | 15 | 19 | Raw CAN request / enter BRIDGE |
 | `0xA0` | 14 | 18 | Continuous CAN frame or request status |
 
@@ -61,7 +61,7 @@ When no command arrives within `cmd_timeout_sec`, control mode sends zero/disabl
 | 35–41 | RR | Driver A/MOT2 |
 | 42 | checksum | XOR of bytes 0–41 |
 
-The fixed payload portion is `<BBBBHBHH` (11 bytes). Each wheel is `<BhHh` (7 bytes): raw status (uint8), signed RPM (int16), current in 0.1 A (uint16), signed controller output (int16, -32768..32767). Negative controller output is preserved in Python and JSON. Driver voltages are already mV; no additional scale factor is applied.
+The fixed payload portion is `<BBBBHBHH` (11 bytes). Each wheel is `<BhHH` (7 bytes): raw status (uint8), signed RPM (int16), current in 0.1 A (uint16), unsigned controller output (uint16, 0..1023). Driver voltages are already mV; no additional scale factor is applied.
 
 `~/status` JSON has this shape:
 
@@ -81,7 +81,7 @@ The fixed payload portion is `<BBBBHBHH` (11 bytes). Each wheel is `<BhHh` (7 by
 }
 ```
 
-Validity bits 0–3 correspond to LF/RF/LR/RR; bits 4–5 to A/B voltage. The MCU marks wheel telemetry fresh for 500 ms and voltages for 3 s. Invalid fields can retain old measurements: always check `valid` before using a value. The ROS node preserves these raw values and does not invent a fresh measurement or overwrite them with zero. The snapshot's age is separate from its MCU validity bits; consumers must also track whether status packets are still arriving. The web monitor exposes `motor_status_age_sec` for this purpose.
+Validity bits 0–3 correspond to LF/RF/LR/RR; bits 4–5 to A/B voltage. The MCU marks wheel telemetry fresh for 3 ms and voltages for 3 s. Invalid fields can retain old measurements: always check `valid` before using a value. The ROS node preserves these raw values and does not invent a fresh measurement or overwrite them with zero. The snapshot's age is separate from its MCU validity bits; consumers must also track whether status packets are still arriving. The web monitor exposes `motor_status_age_sec` for this purpose.
 
 No representative battery field is added to v2. Consumers needing one must use min(A, B) only while both voltages are valid, and otherwise mark it invalid.
 
@@ -137,7 +137,7 @@ AA 55 0E A0 seq status id_lo id_hi dlc d0 d1 d2 d3 d4 d5 d6 d7 checksum
 
 Read/write errors and short writes close the port and reset the connection's parser, v2 selection and last velocity command. Reconnect is retried at most once per second. A fresh `/cmd_vel` is needed after reconnect. CAN requests submitted while disconnected are dropped; startup and reconnect never replay requests or send an automatic bridge request.
 
-Each read callback drains up to 4096 bytes in 512-byte chunks. This bounds callback work while accommodating bursts. Default v2 traffic is 43 bytes × 10 Hz = 430 bytes/s (about 3.73% of 115200 baud with 8N1). Command traffic at 50 Hz brings the simple combined total to about 8.5%.
+Each read callback drains up to 4096 bytes in 512-byte chunks. This bounds callback work while accommodating bursts. Default v2 traffic is 43 bytes × 100 Hz = 4,300 bytes/s (about 37.3% of 115200 baud with 8N1). Command traffic at 50 Hz brings the simple combined total to about 42.1%.
 
 ## Build, run and test
 

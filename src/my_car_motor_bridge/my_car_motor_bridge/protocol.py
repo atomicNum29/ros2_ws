@@ -18,7 +18,7 @@ PAYLOAD_LENGTHS = {
 }
 PACKET_OVERHEAD = 4
 SYSTEM_STATUS_V2_FIXED = struct.Struct("<BBBBHBHH")
-WHEEL_TELEMETRY = struct.Struct("<BhHh")
+WHEEL_TELEMETRY = struct.Struct("<BhHH")
 WHEEL_NAMES = ("lf", "rf", "lr", "rr")
 COMMAND_MIN = -(2**15)
 COMMAND_MAX = 2**15 - 1
@@ -76,7 +76,7 @@ class WheelTelemetry:
     status: int
     rpm: int
     current_deci_amp: int
-    controller_output: int  # signed int16 on the wire
+    controller_output: int  # unsigned int16 on the wire
 
 
 @dataclass(frozen=True)

@@ -86,7 +86,7 @@
         const usable = fresh && wheel?.valid === true && Boolean(validity & (1 << bit));
         const bits = wheel ? decodeBits(wheel.status, MOTOR_BITS, 8) : null;
         const valid = usable && bits !== null && integer(wheel.rpm, -32768, 32767)
-          && integer(wheel.current_deci_amp, 0, 65535) && integer(wheel.controller_output, -32768, 32767);
+          && integer(wheel.current_deci_amp, 0, 65535) && integer(wheel.controller_output, 0, 1023);
         return { key, label, driver, wheel, bits, valid,
           tone: valid ? (wheel.status ? "bad" : "ok") : "neutral",
           labelText: schema === "legacy" ? "구형 메시지 · 정보 없음" : !wheel ? "데이터 없음"
