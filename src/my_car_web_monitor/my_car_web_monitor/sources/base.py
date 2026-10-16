@@ -25,3 +25,11 @@ class FrameSource(ABC):
     @abstractmethod
     async def read(self) -> Any:
         """Return the next frame as a numpy ndarray."""
+
+    async def read_frame(self) -> tuple[Any, float | None, str]:
+        """Pixels, capture time in server monotonic seconds, and time provenance.
+
+        None means this source cannot provide a trustworthy capture timestamp.
+        Existing array-only sources remain compatible and report no latency.
+        """
+        return await self.read(), None, ""

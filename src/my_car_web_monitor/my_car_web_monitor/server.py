@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rclpy.node import Node
@@ -59,6 +60,14 @@ def create_app(node: Node, settings: Settings) -> FastAPI:
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/time")
+    async def server_time() -> JSONResponse:
+        received = time.monotonic() * 1000
+        return JSONResponse(
+            {"received_ms": received, "sent_ms": time.monotonic() * 1000},
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.get("/streams")
     async def streams() -> dict[str, list[dict[str, str]]]:

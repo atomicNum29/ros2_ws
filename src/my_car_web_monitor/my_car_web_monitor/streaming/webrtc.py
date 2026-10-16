@@ -10,6 +10,7 @@ from aiortc.codecs import h264, vpx
 from av import VideoFrame
 
 from my_car_web_monitor.sources.base import FrameSource
+from my_car_web_monitor.streaming.frame_timing import stamp_frame
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,8 @@ class WebRTCVideoTrack(VideoStreamTrack):
 
     async def recv(self) -> VideoFrame:
         try:
-            image = await self._source.read()
+            image, captured_at, kind = await self._source.read_frame()
+            image = stamp_frame(image, captured_at, kind)
         except Exception:
             logger.exception("Video source failed while reading a frame")
             raise

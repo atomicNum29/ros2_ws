@@ -112,7 +112,7 @@
         <div class="stream-info">
           <strong class="stream-title"></strong>
           <div class="stream-connection" role="status" aria-label="영상 연결 상태">
-            <span class="connection-status">미연결</span><span class="ice-status">ICE 대기</span><span class="stream-status">영상 대기</span>
+            <span class="connection-status">미연결</span><span class="ice-status">ICE 대기</span><span class="video-latency" title="촬영 시각과 브라우저 예상 표시 시각의 차이">지연 —</span>
           </div>
           <div class="stream-actions"><button class="start-stream primary">연결</button><button class="stop-stream">끊기</button></div>
         </div>
@@ -120,6 +120,7 @@
       </article>
     </template>
 
+    <script src="/static/video-latency.js"></script>
     <script src="/static/lidar.js"></script>
     <script src="/static/motor-status.js"></script>
     <script>
@@ -156,7 +157,6 @@
         };
         if (prefix === "connection") element.textContent = value === "idle" ? "미연결" : (labels[value] || value);
         else if (prefix === "ice") element.textContent = `ICE ${labels[value] || value}`;
-        else if (prefix === "state") element.textContent = `영상 ${labels[value] || value}`;
         else element.textContent = `${prefix}: ${value}`;
         element.classList.toggle("bad", bad);
         element.classList.toggle("ok", !bad && value !== "idle" && value !== "waiting");
@@ -250,7 +250,6 @@
         const stopButton = fragment.querySelector(".stop-stream");
         const connectionStatus = fragment.querySelector(".connection-status");
         const iceStatus = fragment.querySelector(".ice-status");
-        const streamStatus = fragment.querySelector(".stream-status");
         const cardError = fragment.querySelector(".card-error");
 
         title.textContent = stream.id;
@@ -260,8 +259,8 @@
           video,
           connectionStatus,
           iceStatus,
-          streamStatus,
           cardError,
+          latency: window.VideoLatencyUI?.attach(video, fragment.querySelector(".video-latency")),
           peerConnection: null,
           frameWatchdog: null,
           lastVideoTime: 0,
@@ -310,6 +309,7 @@
         card.lastFrameAt = 0;
         card.lastFramesDecoded = 0;
         card.peerConnection = new RTCPeerConnection();
+        card.latency?.start();
         card.peerConnection.addTransceiver("video", { direction: "recvonly" });
         card.peerConnection.ontrack = (event) => {
           card.video.srcObject = event.streams[0];
@@ -345,7 +345,6 @@
           });
           if (!response.ok) throw new Error(`offer failed: ${response.status}`);
           await card.peerConnection.setRemoteDescription(await response.json());
-          setText(card.streamStatus, "state", "connecting");
           card.frameWatchdog = window.setInterval(() => void checkVideoProgress(card), 1000);
         } catch (error) {
           card.cardError.textContent = error.message;
@@ -354,6 +353,7 @@
       }
 
       async function stopStream(card) {
+        card.latency?.stop();
         if (card.frameWatchdog) {
           window.clearInterval(card.frameWatchdog);
           card.frameWatchdog = null;
@@ -368,12 +368,11 @@
         card.video.srcObject = null;
         setText(card.connectionStatus, "connection", "idle");
         setText(card.iceStatus, "ice", "idle");
-        setText(card.streamStatus, "state", "idle");
       }
 
       function markStreamInterrupted(card, reason) {
         if (!card.peerConnection) return;
-        setText(card.streamStatus, "state", "interrupted");
+        card.latency?.stop();
         card.cardError.textContent = reason;
       }
 
@@ -396,7 +395,7 @@
           card.lastVideoTime = card.video.currentTime;
           card.lastFrameAt = now;
           card.cardError.textContent = "";
-          setText(card.streamStatus, "state", "streaming");
+          card.latency?.start();
         } else if (card.lastFrameAt && now - card.lastFrameAt > 2000) {
           markStreamInterrupted(card, "no video frames received for 2 seconds");
         }

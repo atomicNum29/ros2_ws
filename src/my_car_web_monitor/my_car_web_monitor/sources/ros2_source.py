@@ -70,6 +70,7 @@ class RosImageSource(FrameSource):
         self._latest = None
         self._decoded_message = None
         self._frame = None
+        self._captured_at = None
         self._last_warning = float("-inf")
 
     async def start(self) -> None:
@@ -124,6 +125,7 @@ class RosImageSource(FrameSource):
                 self._decoded_message = message
                 self._frame = None
                 try:
+                    self._captured_at = self._capture_time(message)
                     self._frame = decode_image(message)
                     self.height, self.width = self._frame.shape[:2]
                 except (ValueError, OSError, TypeError) as exc:
@@ -133,3 +135,21 @@ class RosImageSource(FrameSource):
                         self._last_warning = now
             if self._frame is not None:
                 return self._frame
+
+    def _capture_time(self, message) -> float | None:
+        if self._node.get_parameter("use_sim_time").value:
+            return None
+        stamp = message.header.stamp.sec + message.header.stamp.nanosec / 1e9
+        mono_now = time.monotonic()
+        ros_now = self._node.get_clock().now().nanoseconds / 1e9
+        age = ros_now - stamp
+        # Requires acquisition-time headers on the same synchronized system clock.
+        if stamp > 0 and 0 <= age < 86400:
+            return mono_now - age
+        return None
+
+    async def read_frame(self) -> tuple[np.ndarray, float | None, str]:
+        image = await self.read()
+        # Cached with the decoded message: a repeated old image must keep its
+        # original capture time, even if the system clock is later adjusted.
+        return image, self._captured_at, "R"

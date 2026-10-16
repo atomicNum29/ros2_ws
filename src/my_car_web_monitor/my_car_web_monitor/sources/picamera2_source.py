@@ -57,7 +57,35 @@ class Picamera2Source(FrameSource):
     async def read(self) -> np.ndarray:
         if not self._started:
             raise RuntimeError("Camera source is not started.")
-        return await asyncio.to_thread(self._camera.capture_array)
+        image, _, _ = await self.read_frame()
+        return image
+
+    async def read_frame(self) -> tuple[np.ndarray, float | None, str]:
+        if not self._started:
+            raise RuntimeError("Camera source is not started.")
+
+        def capture():
+            request = self._camera.capture_request()
+            try:
+                # Obtain pixels and metadata from the SAME camera request.
+                image = request.make_array("main").copy()
+                metadata = request.get_metadata()
+                sensor_ns = metadata.get("SensorTimestamp")
+                exposure_us = metadata.get("ExposureTime")
+                captured_at = None
+                if isinstance(sensor_ns, (int, float)) and isinstance(exposure_us, (int, float)):
+                    # libcamera SensorTimestamp uses CLOCK_BOOTTIME and marks
+                    # first-pixel readout. Subtract exposure for its exposure start.
+                    boot_now = time.clock_gettime(time.CLOCK_BOOTTIME)
+                    mono_now = time.monotonic()
+                    age = boot_now - sensor_ns / 1e9 + exposure_us / 1e6
+                    if sensor_ns > 0 and exposure_us >= 0 and age >= 0:
+                        captured_at = mono_now - age
+                return image, captured_at, "P"
+            finally:
+                request.release()
+
+        return await asyncio.to_thread(capture)
 
 
 class SyntheticVideoSource(FrameSource):
@@ -102,3 +130,6 @@ class SyntheticVideoSource(FrameSource):
         self._frame_index += 1
         return frame
 
+    async def read_frame(self) -> tuple[np.ndarray, float | None, str]:
+        image = await self.read()
+        return image, time.monotonic(), "S"
