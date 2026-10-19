@@ -26,6 +26,7 @@ All packets use `AA 55 length payload checksum`. Length includes type and exclud
 | Type | Payload bytes | Total bytes | Purpose |
 | --- | --- | --- | --- |
 | `0x01` | 7 | 11 | Velocity command / enter CONTROL |
+| `0x02` | 4 | 8 | Protected MCU reset request |
 | `0x81` | 7 | 11 | Legacy basic status; disabled by default in current MCU |
 | `0x82` | 39 | 43 | System Status v2, 100 Hz in CONTROL |
 | `0x20` | 15 | 19 | Raw CAN request / enter BRIDGE |
@@ -42,6 +43,25 @@ AA 55 07 01 seq v_lo v_hi w_lo w_hi flags checksum
 `v_cmd` and `w_cmd` are signed int16: `linear.x * 1000` in milli m/s and `angular.z * 1000` in milli rad/s. For example 0.1 m/s becomes 100, and -0.5 rad/s becomes -500. Flags: bit 0 enable, bit 1 emergency stop. The existing converter saturates at int16 limits; the current MCU separately accepts v=±2000 and w=±5000 and rejects commands outside those limits. Non-finite velocity input is discarded and clears the latest command.
 
 When no command arrives within `cmd_timeout_sec`, control mode sends zero/disable if `send_zero_when_timeout` is true. Command ages use monotonic time, independent of ROS simulation time. Control shutdown attempts a final zero/disable. MCU timeout and fault handling remain responsible for serial loss and low-level safety.
+
+### Reset `0x02`
+
+```text
+AA 55 04 02 seq A5 5A checksum
+```
+
+`ResetCommand(seq).pack()` in `protocol.py` builds this eight-byte frame using
+the shared XOR checksum. `seq` must be an integer in 0..255; booleans and floats
+are rejected. The two magic bytes are fixed to match the MCU firmware. Like
+other known outbound frames, an echoed reset frame is consumed by the receive
+parser without producing a status or acknowledgement.
+
+The MCU validates the checksum and magic, stops periodic CAN traffic, attempts
+TQ-OFF transmission to both drivers, and requests a system reset. There is no
+reset acknowledgement; the sequence byte is reserved for host tracking.
+This adds packet construction only: no ROS reset service, node reset workflow,
+automatic transmission or web endpoint is provided yet. Constructing or packing
+the command does not reboot the device.
 
 ### System Status v2 `0x82`
 

@@ -8,12 +8,14 @@ from typing import Callable
 
 HEADER = b"\xAA\x55"
 TYPE_COMMAND = 0x01
+TYPE_RESET = 0x02
+RESET_MAGIC = b"\xA5\x5A"
 TYPE_STATUS = 0x81
 TYPE_SYSTEM_STATUS_V2 = 0x82
 TYPE_CAN_REQUEST = 0x20
 TYPE_CAN_RESPONSE = 0xA0
 PAYLOAD_LENGTHS = {
-    TYPE_COMMAND: 7, TYPE_STATUS: 7, TYPE_SYSTEM_STATUS_V2: 39,
+    TYPE_COMMAND: 7, TYPE_RESET: 4, TYPE_STATUS: 7, TYPE_SYSTEM_STATUS_V2: 39,
     TYPE_CAN_REQUEST: 15, TYPE_CAN_RESPONSE: 14,
 }
 PACKET_OVERHEAD = 4
@@ -58,6 +60,17 @@ class MotorCommand:
             "<BBhhB", TYPE_COMMAND, self.seq & 0xFF,
             clamp_command(self.v_cmd), clamp_command(self.w_cmd), flags,
         ))
+
+
+@dataclass(frozen=True)
+class ResetCommand:
+    """Protected MCU reboot request; packing does not send or confirm a reset."""
+
+    seq: int
+
+    def pack(self) -> bytes:
+        _integer(self.seq, "seq", 255)
+        return _frame(struct.pack("<BB2s", TYPE_RESET, self.seq, RESET_MAGIC))
 
 
 @dataclass(frozen=True)
