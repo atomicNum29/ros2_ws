@@ -131,7 +131,7 @@ def test_status_selection_and_reconnect_resets(nodes, monkeypatch):
     node._on_read_timer()
     assert len(published) == 2
     assert published[0]['battery_mv'] == 24000
-    assert published[1]['version'] == 1
+    assert published[1]['version'] == 2
     clock.now += 10
     node.transport.incoming.extend(LEGACY)
     node._on_read_timer()
@@ -268,7 +268,7 @@ def test_actual_ros_topic_roundtrip(nodes, mode):
             node._on_send_timer()
             assert node.transport.writes[-1][5:7] == b'\x64\x00'
             payload = bytearray(V2[3:-1])
-            payload[16:18] = bytes.fromhex('0C FE')  # LF controller_output = -500
+            payload[18:22] = bytes.fromhex('0C FE FF FF')  # LF encoder_count = -500
             node.transport.incoming.extend(frame(payload))
         else:
             publisher.publish(String(data='{"can_id":1,"dlc":2,"data":[4,143]}'))
@@ -277,9 +277,13 @@ def test_actual_ros_topic_roundtrip(nodes, mode):
             node.transport.incoming.extend(frame(struct.pack('<BBBHB8s', 0xA0, 0, 0, 0x701, 3, b'\x8f\xf0\0')))
         node._on_read_timer()
         spin_until(executor, lambda: bool(output))
-        assert output[0]['version'] == 1 if mode == 'control' else output[0]['can_id'] == 0x701
+        assert output[0]['version'] == 2 if mode == 'control' else output[0]['can_id'] == 0x701
         if mode == 'control':
-            assert output[0]['wheels']['lf']['controller_output'] == -500
+            assert output[0]['snapshot_timestamp_us'] == 14500
+            assert output[0]['wheels']['lf']['encoder_count'] == -500
+            assert output[0]['wheels']['lf']['rx_timestamp_us'] == 10700
+            assert 'controller_output' not in output[0]['wheels']['lf']
+            assert 'current_deci_amp' not in output[0]['wheels']['lf']
     finally:
         peer.destroy_subscription(subscription)
         executor.shutdown()

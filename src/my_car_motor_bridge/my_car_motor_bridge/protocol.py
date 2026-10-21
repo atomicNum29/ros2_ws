@@ -15,12 +15,12 @@ TYPE_SYSTEM_STATUS_V2 = 0x82
 TYPE_CAN_REQUEST = 0x20
 TYPE_CAN_RESPONSE = 0xA0
 PAYLOAD_LENGTHS = {
-    TYPE_COMMAND: 7, TYPE_RESET: 4, TYPE_STATUS: 7, TYPE_SYSTEM_STATUS_V2: 39,
+    TYPE_COMMAND: 7, TYPE_RESET: 4, TYPE_STATUS: 7, TYPE_SYSTEM_STATUS_V2: 59,
     TYPE_CAN_REQUEST: 15, TYPE_CAN_RESPONSE: 14,
 }
 PACKET_OVERHEAD = 4
-SYSTEM_STATUS_V2_FIXED = struct.Struct("<BBBBHBHH")
-WHEEL_TELEMETRY = struct.Struct("<BhHH")
+SYSTEM_STATUS_V2_FIXED = struct.Struct("<BBBBHBHHI")
+WHEEL_TELEMETRY = struct.Struct("<BhiI")
 WHEEL_NAMES = ("lf", "rf", "lr", "rr")
 COMMAND_MIN = -(2**15)
 COMMAND_MAX = 2**15 - 1
@@ -88,8 +88,8 @@ class MotorStatus:
 class WheelTelemetry:
     status: int
     rpm: int
-    current_deci_amp: int
-    controller_output: int  # unsigned int16 on the wire
+    encoder_count: int
+    rx_timestamp_us: int
 
 
 @dataclass(frozen=True)
@@ -101,6 +101,7 @@ class SystemStatusV2:
     validity: int
     driver_a_voltage_mv: int
     driver_b_voltage_mv: int
+    snapshot_timestamp_us: int
     lf: WheelTelemetry
     rf: WheelTelemetry
     lr: WheelTelemetry
@@ -110,6 +111,7 @@ class SystemStatusV2:
         return {
             "version": self.version, "seq": self.seq, "state": self.state,
             "system_error": self.system_error, "validity": self.validity,
+            "snapshot_timestamp_us": self.snapshot_timestamp_us,
             "drivers": {
                 "a": {"voltage_mv": self.driver_a_voltage_mv,
                       "valid": bool(self.validity & 0x10)},
@@ -225,14 +227,14 @@ def try_parse_packet(
         if packet_type == TYPE_STATUS:
             return MotorStatus(*struct.unpack("<BBBHH", payload)[1:])
         if packet_type == TYPE_SYSTEM_STATUS_V2:
-            if payload[1] != 1:
+            if payload[1] != 2:
                 if on_error:
                     on_error(f"Unsupported System Status version {payload[1]}")
                 continue
             fixed = SYSTEM_STATUS_V2_FIXED.unpack_from(payload)
             wheels = tuple(
                 WheelTelemetry(*WHEEL_TELEMETRY.unpack_from(payload, offset))
-                for offset in (11, 18, 25, 32)
+                for offset in (15, 26, 37, 48)
             )
             return SystemStatusV2(*fixed[1:], *wheels)
         if packet_type == TYPE_CAN_RESPONSE:

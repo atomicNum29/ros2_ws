@@ -28,11 +28,11 @@ All packets use `AA 55 length payload checksum`. Length includes type and exclud
 | `0x01` | 7 | 11 | Velocity command / enter CONTROL |
 | `0x02` | 4 | 8 | Protected MCU reset request |
 | `0x81` | 7 | 11 | Legacy basic status; disabled by default in current MCU |
-| `0x82` | 39 | 43 | System Status v2, 100 Hz in CONTROL |
+| `0x82` | 59 | 63 | System Status v2, 100 Hz in CONTROL |
 | `0x20` | 15 | 19 | Raw CAN request / enter BRIDGE |
 | `0xA0` | 14 | 18 | Continuous CAN frame or request status |
 
-The stream parser handles split headers/packets, multiple packets per read, noise and checksum/type/length errors. Unsupported v2 versions are consumed with a warning; only wire version **1** is decoded. Status sequences wrap at 255 and are not command acknowledgements. Neither status nor tunnel packets are filtered by sequence.
+The stream parser handles split headers/packets, multiple packets per read, noise and checksum/type/length errors. Unsupported v2 versions are consumed with a warning; only wire version **2** is decoded. Status sequences wrap at 255 and are not command acknowledgements. Neither status nor tunnel packets are filtered by sequence.
 
 ### Command `0x01`
 
@@ -68,35 +68,39 @@ the command does not reboot the device.
 | Packet bytes | Field | Format |
 | --- | --- | --- |
 | 3 | type | `0x82` |
-| 4 | version | `1` (despite the v2 packet name) |
+| 4 | version | `2` |
 | 5 | seq | uint8 |
 | 6 | state | uint8, MCU final state |
 | 7–8 | system_error | uint16 |
 | 9 | validity | uint8 |
 | 10–11 | Driver A voltage | uint16 mV |
 | 12–13 | Driver B voltage | uint16 mV |
-| 14–20 | LF | Driver A/MOT1 |
-| 21–27 | RF | Driver B/MOT1 |
-| 28–34 | LR | Driver B/MOT2 |
-| 35–41 | RR | Driver A/MOT2 |
-| 42 | checksum | XOR of bytes 0–41 |
+| 14–17 | snapshot_timestamp_us | uint32, raw MCU micros() |
+| 18–28 | LF | Driver A/MOT1/PID196 |
+| 29–39 | RF | Driver B/MOT1/PID196 |
+| 40–50 | LR | Driver B/MOT2/PID201 |
+| 51–61 | RR | Driver A/MOT2/PID201 |
+| 62 | checksum | XOR of bytes 0–61 |
 
-The fixed payload portion is `<BBBBHBHH` (11 bytes). Each wheel is `<BhHH` (7 bytes): raw status (uint8), signed RPM (int16), current in 0.1 A (uint16), unsigned controller output (uint16, 0..1023). Driver voltages are already mV; no additional scale factor is applied.
+The fixed payload portion is `<BBBBHBHHI` (15 bytes). Each wheel is `<BhiI` (11 bytes): raw status (uint8), signed RPM (int16), encoder_count (int32), and rx_timestamp_us (uint32). Driver voltages are already mV. There are no current or controller output fields in wire version 2. This layout matches Wheel-Dragoon commit `3327abd`.
+
+Timestamps are raw MCU microseconds, not ROS/UNIX time; the bridge publishes them unchanged. They wrap every approximately 71.6 minutes. Consumers can compute elapsed time or sample age with `(current_us - previous_us) & 0xFFFFFFFF` within a connection session, and must reset their time/count baselines after reconnects or MCU restarts. Check wheel validity before using any measurement: invalid wheels may retain old RPM, encoder count, and timestamps, and timestamp zero alone does not imply invalidity. Repeated timestamps may represent the same sample; consumers must not repeatedly integrate it. Encoder counts are raw counts, with no distance conversion or odometry integration in this bridge.
 
 `~/status` JSON has this shape:
 
 ```json
 {
-  "version": 1, "seq": 16, "state": 1, "system_error": 0, "validity": 63,
+  "version": 2, "seq": 16, "state": 1, "system_error": 0, "validity": 63,
+  "snapshot_timestamp_us": 14500,
   "drivers": {
     "a": {"voltage_mv": 24000, "valid": true},
     "b": {"voltage_mv": 23800, "valid": true}
   },
   "wheels": {
-    "lf": {"status": 0, "rpm": 100, "current_deci_amp": 123, "controller_output": 500, "valid": true},
-    "rf": {"status": 0, "rpm": -100, "current_deci_amp": 120, "controller_output": 490, "valid": true},
-    "lr": {"status": 0, "rpm": -80, "current_deci_amp": 110, "controller_output": 450, "valid": true},
-    "rr": {"status": 0, "rpm": 80, "current_deci_amp": 115, "controller_output": 460, "valid": true}
+    "lf": {"status": 0, "rpm": 100, "encoder_count": 123456, "rx_timestamp_us": 10700, "valid": true},
+    "rf": {"status": 0, "rpm": -100, "encoder_count": -123456, "rx_timestamp_us": 13700, "valid": true},
+    "lr": {"status": 0, "rpm": -80, "encoder_count": -654321, "rx_timestamp_us": 14100, "valid": true},
+    "rr": {"status": 0, "rpm": 80, "encoder_count": 654321, "rx_timestamp_us": 11020, "valid": true}
   }
 }
 ```
@@ -157,7 +161,7 @@ AA 55 0E A0 seq status id_lo id_hi dlc d0 d1 d2 d3 d4 d5 d6 d7 checksum
 
 Read/write errors and short writes close the port and reset the connection's parser, v2 selection and last velocity command. Reconnect is retried at most once per second. A fresh `/cmd_vel` is needed after reconnect. CAN requests submitted while disconnected are dropped; startup and reconnect never replay requests or send an automatic bridge request.
 
-Each read callback drains up to 4096 bytes in 512-byte chunks. This bounds callback work while accommodating bursts. Default v2 traffic is 43 bytes × 100 Hz = 4,300 bytes/s (about 37.3% of 115200 baud with 8N1). Command traffic at 50 Hz brings the simple combined total to about 42.1%.
+Each read callback drains up to 4096 bytes in 512-byte chunks. This bounds callback work while accommodating bursts. Default v2 traffic is 63 bytes × 100 Hz = 6,300 bytes/s (about 54.7% of 115200 baud with 8N1). Command traffic at 50 Hz brings the simple combined total to about 59.5%.
 
 ## Build, run and test
 

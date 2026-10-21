@@ -8,11 +8,13 @@ from my_car_motor_bridge.protocol import (
 )
 from my_car_motor_bridge.command_converter import convert_cmd_vel
 
-# Independent golden fixture copied verbatim from Wheel-Dragoon/README.md.
+# Independent golden fixture from Wheel-Dragoon commit 3327abd README.
 V2 = bytes.fromhex(
-    'AA 55 27 82 01 10 01 00 00 3F C0 5D F8 5C '
-    '00 64 00 7B 00 F4 01 00 9C FF 78 00 EA 01 '
-    '00 B0 FF 6E 00 C2 01 00 50 00 73 00 CC 01 5A'
+    'AA 55 3B 82 02 10 01 00 00 3F C0 5D F8 5C A4 38 00 00 '
+    '00 64 00 40 E2 01 00 CC 29 00 00 '
+    '00 9C FF C0 1D FE FF 84 35 00 00 '
+    '00 B0 FF 0F 04 F6 FF 14 37 00 00 '
+    '00 50 00 F1 FB 09 00 0C 2B 00 00 F9'
 )
 
 
@@ -35,22 +37,23 @@ def parse_all(buffer):
 
 
 def test_readme_golden_and_layout():
-    assert len(V2) == 43
-    assert SYSTEM_STATUS_V2_FIXED.size == 11
-    assert WHEEL_TELEMETRY.size == 7
+    assert len(V2) == 63
+    assert SYSTEM_STATUS_V2_FIXED.size == 15
+    assert WHEEL_TELEMETRY.size == 11
     status = try_parse_packet(bytearray(V2))
     assert isinstance(status, SystemStatusV2)
-    assert (status.version, status.seq, status.state, status.system_error) == (1, 16, 1, 0)
+    assert (status.version, status.seq, status.state, status.system_error) == (2, 16, 1, 0)
     assert (status.driver_a_voltage_mv, status.driver_b_voltage_mv) == (24000, 23800)
-    assert [(w.status, w.rpm, w.current_deci_amp, w.controller_output)
+    assert [(w.status, w.rpm, w.encoder_count, w.rx_timestamp_us)
             for w in (status.lf, status.rf, status.lr, status.rr)] == [
-        (0, 100, 123, 500), (0, -100, 120, 490),
-        (0, -80, 110, 450), (0, 80, 115, 460),
+        (0, 100, 123456, 10700), (0, -100, -123456, 13700),
+        (0, -80, -654321, 14100), (0, 80, 654321, 11020),
     ]
+    assert status.snapshot_timestamp_us == 14500
     assert all(w['valid'] for w in status.to_dict()['wheels'].values())
 
 
-@pytest.mark.parametrize('split', range(44))
+@pytest.mark.parametrize('split', range(64))
 def test_every_split(split):
     buffer = bytearray(V2[:split])
     output = parse_all(buffer)
@@ -94,30 +97,38 @@ def test_trailing_header_preserved_and_noise_bounded():
 
 def test_payload_header_is_data_and_integer_boundaries():
     payload = bytearray(V2[3:-1])
-    struct.pack_into('<BhHh', payload, 11, 0xAA, -32768, 0x55AA, -1)
-    struct.pack_into('<BhHh', payload, 18, 0x55, 32767, 0, 0)
+    struct.pack_into('<BhiI', payload, 15, 0xAA, -32768, -2147483648, 0x55AA)
+    struct.pack_into('<BhiI', payload, 26, 0x55, 32767, 2147483647, 0xFFFFFFFF)
     status = try_parse_packet(bytearray(frame(payload)))
-    assert (status.lf.status, status.lf.rpm, status.lf.current_deci_amp) == (170, -32768, 0x55AA)
-    assert status.rf.rpm == 32767
+    assert (status.lf.status, status.lf.rpm, status.lf.encoder_count) == (170, -32768, -2147483648)
+    assert (status.rf.rpm, status.rf.encoder_count, status.rf.rx_timestamp_us) == (32767, 2147483647, 0xFFFFFFFF)
 
 
-@pytest.mark.parametrize('wheel,offset', [('lf', 11), ('rf', 18), ('lr', 25), ('rr', 32)])
+@pytest.mark.parametrize('wheel,offset', [('lf', 15), ('rf', 26), ('lr', 37), ('rr', 48)])
 @pytest.mark.parametrize('wire,expected', [
-    ('00 80', -32768), ('0C FE', -500), ('FF FF', -1),
-    ('00 00', 0), ('FF 7F', 32767),
+    ('00 00 00 80', -2147483648), ('0C FE FF FF', -500),
+    ('FF FF FF FF', -1), ('00 00 00 00', 0), ('FF FF FF 7F', 2147483647),
 ])
-def test_signed_controller_output_preserved_in_json(wheel, offset, wire, expected):
+def test_encoder_count_and_raw_timestamps_preserved_in_json(wheel, offset, wire, expected):
     payload = bytearray(V2[3:-1])
-    # Explicit wire bytes avoid sharing the decoder's struct/sign assumption.
-    payload[offset + 3:offset + 5] = bytes.fromhex('FF FF')
-    payload[offset + 5:offset + 7] = bytes.fromhex(wire)
-    packet = frame(payload)
-    assert len(packet) == 43
-    status = try_parse_packet(bytearray(packet))
-    assert getattr(status, wheel).controller_output == expected
-    result = status.to_dict()['wheels'][wheel]
-    assert result['controller_output'] == expected
-    assert result['current_deci_amp'] == 65535
+    payload[11:15] = bytes.fromhex('FF FF FF FF')
+    payload[offset + 3:offset + 7] = bytes.fromhex(wire)
+    payload[offset + 7:offset + 11] = bytes.fromhex('00 00 00 00')
+    status = try_parse_packet(bytearray(frame(payload)))
+    result = status.to_dict()
+    assert result['snapshot_timestamp_us'] == 0xFFFFFFFF
+    assert result['wheels'][wheel]['encoder_count'] == expected
+    assert result['wheels'][wheel]['rx_timestamp_us'] == 0
+    assert result['wheels'][wheel]['valid'] is True
+    assert 'controller_output' not in result['wheels'][wheel]
+    assert 'current_deci_amp' not in result['wheels'][wheel]
+
+
+@pytest.mark.parametrize('version', [1, 2])
+def test_old_layout_is_rejected_even_with_new_version(version):
+    payload = bytes([0x82, version]) + bytes(37)
+    assert try_parse_packet(bytearray(frame(payload))) is None
+    assert isinstance(try_parse_packet(bytearray(frame(payload) + V2)), SystemStatusV2)
 
 
 @pytest.mark.parametrize('bit', range(6))
@@ -137,13 +148,14 @@ def test_individual_validity_and_raw_error_semantics(bit):
     assert 'battery_mv' not in result and 'error' not in result
 
 
-def test_unsupported_version_consumed_without_hiding_next_frame():
+@pytest.mark.parametrize('version', [1, 3])
+def test_unsupported_version_consumed_without_hiding_next_frame(version):
     payload = bytearray(V2[3:-1])
-    payload[1] = 2
+    payload[1] = version
     errors = []
     buffer = bytearray(frame(payload) + LEGACY)
     assert isinstance(try_parse_packet(buffer, errors.append), MotorStatus)
-    assert errors == ['Unsupported System Status version 2']
+    assert errors == [f'Unsupported System Status version {version}']
     assert not buffer
 
 
