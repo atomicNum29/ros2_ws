@@ -288,9 +288,11 @@
         if (!response.ok) throw new Error(`control config failed: ${response.status}`);
         const payload = await response.json();
         linearSpeedInput.max = payload.linear_speed;
-        linearSpeedInput.value = payload.linear_speed;
+        linearSpeedInput.min = payload.linear_speed_min;
+        linearSpeedInput.value = payload.linear_speed_default;
         angularSpeedInput.max = payload.angular_speed;
-        angularSpeedInput.value = payload.angular_speed;
+        angularSpeedInput.min = payload.angular_speed_min;
+        angularSpeedInput.value = payload.angular_speed_default;
         updateSpeedSettings();
       }
 

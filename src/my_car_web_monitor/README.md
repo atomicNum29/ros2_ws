@@ -132,8 +132,14 @@ Expected ROS parameters or environment-backed settings:
 - `camera_streams`: stream list such as `front:picamera2:0,debug:ros_image:/camera/image_raw`
 - `cmd_vel_topic`: default `/cmd_vel`
 - `motor_status_topic`: default `/motor_bridge_node/status`
-- `control_linear_speed`: default `0.3`
-- `control_angular_speed`: default `1.0`
+- `CONTROL_LINEAR_SPEED`: linear speed maximum, default `1.0` m/s
+- `CONTROL_LINEAR_SPEED_MIN`: linear slider minimum, default `0.0` m/s
+- `CONTROL_LINEAR_SPEED_DEFAULT`: initial linear speed, default `0.3` m/s
+- `CONTROL_ANGULAR_SPEED`: angular speed maximum, default `3.0` rad/s
+- `CONTROL_ANGULAR_SPEED_MIN`: angular slider minimum, default `0.0` rad/s
+- `CONTROL_ANGULAR_SPEED_DEFAULT`: initial angular speed, default `1.0` rad/s
+
+Each axis requires finite `0 <= minimum <= default <= maximum`; invalid settings fail at startup. The existing `CONTROL_*_SPEED` variables remain the maximum and server command limit. Minimums apply to slider selection; stop commands still send zero and reverse commands retain their sign.
 - `control_publish_rate_hz`: default `20.0`
 - `control_watchdog_timeout_sec`: default `0.3`
 

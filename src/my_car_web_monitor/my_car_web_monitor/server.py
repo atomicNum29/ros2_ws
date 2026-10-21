@@ -92,6 +92,10 @@ def create_app(node: Node, settings: Settings) -> FastAPI:
         return {
             "linear_speed": settings.control_linear_speed,
             "angular_speed": settings.control_angular_speed,
+            "linear_speed_min": settings.control_linear_speed_min,
+            "linear_speed_default": settings.control_linear_speed_default,
+            "angular_speed_min": settings.control_angular_speed_min,
+            "angular_speed_default": settings.control_angular_speed_default,
         }
 
     @app.get("/control/status")

@@ -84,7 +84,7 @@ def page():
             window.__uiRequests.push(url);
             let data = {};
             if (url === '/streams') data = {streams: []};
-            if (url === '/control/config') data = {linear_speed: 1, angular_speed: 3};
+            if (url === '/control/config') data = {linear_speed: 1, angular_speed: 3, linear_speed_min: 0.1, angular_speed_min: 0.2, linear_speed_default: 0.3, angular_speed_default: 1};
             return new Response(JSON.stringify(data));
           };
           window.__statusSockets = [];
@@ -319,3 +319,9 @@ def test_malformed_wheel_hides_computed_values(page, field, value):
     result = browser.js('MotorStatusUI.viewModel(' + json.dumps(status) + ', 0).wheels[0]')
     assert result['valid'] is False
     assert [result[key] for key in ('count', 'revolutions', 'distance')] == ['—'] * 3
+
+
+def test_speed_slider_range_and_initial_value_are_independent(page):
+    browser, _ = page
+    browser.wait('document.getElementById("linear-speed").min === "0.1"')
+    assert browser.js('["linear-speed", "angular-speed"].map(id => {const x = document.getElementById(id); return [x.min, x.max, x.value];})') == [['0.1', '1', '0.3'], ['0.2', '3', '1']]
