@@ -20,10 +20,10 @@
 .wheel-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .wheel-head h3 { font-size: 1rem; }
 .wheel-head h3 span { font-size: 0.8rem; color: var(--muted); font-weight: 400; }
-.wheel-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 18px 0 14px; }
+.wheel-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 18px 0 14px; }
 .wheel-metrics dt { font-size: 0.73rem; color: var(--muted); }
 .wheel-metrics dt span { font-size: 0.65rem; }
-.wheel-metrics dd { margin: 6px 0 0; font-size: 1.2rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.wheel-metrics dd { overflow-wrap: anywhere; margin: 6px 0 0; font-size: 1.2rem; font-weight: 650; font-variant-numeric: tabular-nums; }
 .wheel-errors { display: flex; flex-wrap: wrap; gap: 5px; font-size: 0.76rem; margin: 10px 0 7px; }
 .motor-error { color: var(--danger); padding: 3px 6px; background: #f0525214; border-radius: 4px; }
 .wheel-card[data-tone="neutral"] .motor-error { color: var(--muted); background: #ffffff08; }

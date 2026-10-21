@@ -16,11 +16,11 @@ from my_car_web_monitor.server import create_app
 
 @pytest.mark.parametrize('status', [
     {'seq': 255, 'state': 2, 'error': 4, 'battery_mv': 24000},
-    {'version': 1, 'seq': 16, 'state': 1, 'system_error': 4, 'validity': 0,
+    {'version': 2, 'seq': 16, 'state': 1, 'system_error': 4, 'validity': 0, 'snapshot_timestamp_us': 14500,
      'drivers': {'a': {'voltage_mv': 24000, 'valid': False},
                  'b': {'voltage_mv': 23800, 'valid': False}},
-     'wheels': {wheel: {'status': 0, 'rpm': -100, 'current_deci_amp': 123,
-                        'controller_output': -500, 'valid': False}
+     'wheels': {wheel: {'status': 0, 'rpm': -100, 'encoder_count': -32768,
+                        'rx_timestamp_us': 10700, 'valid': False}
                 for wheel in ('lf', 'rf', 'lr', 'rr')}},
 ])
 def test_status_survives_http_api(status):
@@ -28,7 +28,8 @@ def test_status_survives_http_api(status):
         node = Mock()
         app = create_app(node, Settings(camera_source='synthetic', camera_streams=''))
         async with app.router.lifespan_context(app):
-            callback = node.create_subscription.call_args.args[2]
+            callback = next(call.args[2] for call in node.create_subscription.call_args_list
+                            if call.args[0] is String)
             raw = json.dumps(status)
             callback(String(data=raw))
             messages = []

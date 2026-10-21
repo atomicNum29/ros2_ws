@@ -15,7 +15,8 @@ def test_status_websocket_delivers_all_messages_to_multiple_readonly_clients(int
         node = Mock()
         app = create_app(node, Settings(camera_source='synthetic', camera_streams=''))
         async with app.router.lifespan_context(app):
-            callback = node.create_subscription.call_args.args[2]
+            callback = next(call.args[2] for call in node.create_subscription.call_args_list
+                            if call.args[0] is String)
             clients = []
             for _ in range(2):
                 incoming, outgoing = asyncio.Queue(), asyncio.Queue()
@@ -37,8 +38,9 @@ def test_status_websocket_delivers_all_messages_to_multiple_readonly_clients(int
                 async def publish():
                     for index in range(count):
                         await asyncio.to_thread(callback, String(data=json.dumps({
-                            'version': 1, 'seq': (250 + index) % 256,
-                            'state': 1, 'system_error': 0, 'controller_output': -index,
+                            'version': 2, 'seq': (250 + index) % 256,
+                            'state': 1, 'system_error': 0, 'snapshot_timestamp_us': index,
+                            'wheels': {'lf': {'encoder_count': -index, 'rx_timestamp_us': index}},
                         })))
                         if interval:
                             await asyncio.sleep(interval)

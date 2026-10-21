@@ -2,6 +2,8 @@
 (() => {
   "use strict";
   const STALE_SECONDS = 1.0;
+  const COUNTS_PER_REVOLUTION = 4096 * 4;
+  const WHEEL_CIRCUMFERENCE_METERS = Math.PI * 0.13;
   const STATES = [
     ["출력 비활성", "DISABLED", "neutral"], ["출력 활성", "ENABLED", "ok"],
     ["명령 시간 초과 정지", "TIMEOUT_STOP", "warn"], ["비상 정지", "ESTOP", "bad"],
@@ -49,7 +51,7 @@
   const integer = (value, min, max) => Number.isInteger(value) && value >= min && value <= max;
   const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   const hex = (value, width = 4) => Number.isInteger(value) ? `0x${value.toString(16).toUpperCase().padStart(width, "0")}` : "—";
-  const numberFormats = [0, 1, 2].map(decimals => new Intl.NumberFormat("en-US", {
+  const numberFormats = [0, 1, 2, 3, 4].map(decimals => new Intl.NumberFormat("en-US", {
     minimumFractionDigits: decimals, maximumFractionDigits: decimals,
   }));
   const number = (value, decimals = 0) => numberFormats[decimals].format(value);
@@ -67,7 +69,7 @@
   function viewModel(status, age, serverAvailable = true) {
     let schema = "waiting";
     if (status !== null && status !== undefined) {
-      schema = object(status) && status.version === 1 && "system_error" in status ? "v2"
+      schema = object(status) && status.version === 2 && "system_error" in status ? "v2"
         : object(status) && !("version" in status) && "error" in status ? "legacy" : "unknown";
     }
     const supported = schema === "v2" || schema === "legacy";
@@ -86,15 +88,18 @@
         const usable = fresh && wheel?.valid === true && Boolean(validity & (1 << bit));
         const bits = wheel ? decodeBits(wheel.status, MOTOR_BITS, 8) : null;
         const valid = usable && bits !== null && integer(wheel.rpm, -32768, 32767)
-          && integer(wheel.current_deci_amp, 0, 65535) && integer(wheel.controller_output, 0, 1023);
+          && integer(wheel.encoder_count, -2147483648, 2147483647)
+          && integer(wheel.rx_timestamp_us, 0, 0xFFFFFFFF)
+          && integer(status.snapshot_timestamp_us, 0, 0xFFFFFFFF);
         return { key, label, driver, wheel, bits, valid,
           tone: valid ? (wheel.status ? "bad" : "ok") : "neutral",
           labelText: schema === "legacy" ? "구형 메시지 · 정보 없음" : !wheel ? "데이터 없음"
             : !fresh ? "마지막 수신값" : !usable ? "유효하지 않음" : !valid ? "데이터 형식 오류"
               : wheel.status ? "모터 오류" : "모터 정상",
           rpm: valid ? number(wheel.rpm) : "—",
-          current: valid ? number(wheel.current_deci_amp / 10, 1) : "—",
-          output: valid ? number(wheel.controller_output) : "—" };
+          count: valid ? number(wheel.encoder_count) : "—",
+          revolutions: valid ? number(wheel.encoder_count / COUNTS_PER_REVOLUTION, 4) : "—",
+          distance: valid ? number(wheel.encoder_count / COUNTS_PER_REVOLUTION * WHEEL_CIRCUMFERENCE_METERS, 3) : "—" };
       }),
       drivers: ["a", "b"].map((key, index) => {
         const driver = schema === "v2" ? status.drivers?.[key] : null;
@@ -149,7 +154,9 @@
       card.innerHTML = `<div class="wheel-head"><h3>${key.toUpperCase()} <span>${label}</span></h3><span class="status-badge" data-field="state"></span></div>
         <p class="muted motor-subtitle">Driver ${driver}</p>
         <dl class="wheel-metrics"><div><dt>회전속도 <span>rpm</span></dt><dd data-field="rpm">—</dd></div>
-          <div><dt>전류 <span>A</span></dt><dd data-field="current">—</dd></div><div><dt>제어출력</dt><dd data-field="output">—</dd></div></dl>
+          <div><dt>누적 엔코더 <span>count</span></dt><dd data-field="count">—</dd></div>
+          <div><dt>엔코더 추정 회전수 <span>회전</span></dt><dd data-field="revolutions">—</dd></div>
+          <div><dt>엔코더 추정 거리 <span>m</span></dt><dd data-field="distance">—</dd></div></dl>
         <div class="wheel-errors" data-field="errors"></div><small class="muted" data-field="raw"></small>`;
       refs.wheels.append(card);
       cards.set(key, { card, ...Object.fromEntries([...card.querySelectorAll("[data-field]")].map(node => [node.dataset.field, node])) });
@@ -174,7 +181,7 @@
         : view.schema === "unknown" ? "상태 메시지를 해석할 수 없습니다. 수신 원문에서 형식을 확인하세요."
         : !view.fresh ? "최근 상태 메시지가 없습니다. 마지막 상태와 오류를 표시하며 측정값은 숨깁니다."
         : view.schema === "legacy" ? "구형 상태 메시지입니다. 개별 모터 정보와 드라이버별 전압은 제공되지 않습니다."
-        : "측정값은 MCU validity와 메시지 수신 시각이 모두 유효할 때 표시됩니다.";
+        : "측정값은 MCU validity와 메시지 수신 시각이 모두 유효할 때 표시됩니다. 회전수·거리는 엔코더 원점 기준이며 16,384 count/회전, 바퀴 지름 130 mm로 계산합니다. 거리는 부호 있는 이론값입니다.";
       refs["mcu-detail"].textContent = `${view.state?.[1] || "—"} · ${view.schema === "v2" ? "System Status v2" : view.schema === "legacy" ? "Legacy" : "—"} · seq ${view.seq}${serverCount === null ? "" : ` · ROS 수신 #${serverCount}`} · ${Number.isFinite(age) ? `${age.toFixed(1)} s 전 수신` : "수신 시각 없음"}`;
       if (view.schema === "legacy") {
         const voltage = view.fresh && integer(latest.battery_mv, 1, 65535) ? `${number(latest.battery_mv / 1000, 2)} V` : "확인 불가";
@@ -235,7 +242,7 @@
         tone(card.card, wheel.tone);
         card.state.textContent = wheel.labelText;
         tone(card.state, wheel.tone);
-        for (const field of ["rpm", "current", "output"]) text(card[field], wheel[field]);
+        for (const field of ["rpm", "count", "revolutions", "distance"]) text(card[field], wheel[field]);
         const motorSignature = `${wheel.valid}/${wheel.bits ? wheel.wheel.status : "unknown"}`;
         if (card.errorSignature !== motorSignature) {
           card.errorSignature = motorSignature;

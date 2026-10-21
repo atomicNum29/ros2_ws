@@ -21,11 +21,11 @@ pytestmark = pytest.mark.skipif(not BROWSER, reason='Set MOTOR_UI_BROWSER_URL fo
 
 def snapshot():
     return {
-        'version': 1, 'seq': 16, 'state': 1, 'system_error': 0, 'validity': 63,
+        'version': 2, 'seq': 16, 'state': 1, 'system_error': 0, 'validity': 63, 'snapshot_timestamp_us': 14500,
         'drivers': {'a': {'voltage_mv': 24000, 'valid': True},
                     'b': {'voltage_mv': 23800, 'valid': True}},
-        'wheels': {key: {'status': 0, 'rpm': rpm, 'current_deci_amp': 123,
-                         'controller_output': -500, 'valid': True}
+        'wheels': {key: {'status': 0, 'rpm': rpm, 'encoder_count': 32768 if rpm > 0 else -32768,
+                         'rx_timestamp_us': 10700, 'valid': True}
                    for key, rpm in [('lf', 100), ('rf', -100), ('lr', -80), ('rr', 80)]},
     }
 
@@ -139,13 +139,15 @@ def page():
 
 def test_live_cards_signed_units_and_passive_monitoring(page):
     browser, shared = page
-    assert browser.text('[data-role=mcu]') == '출력 허용'
-    assert browser.text('[data-role=voltage-a]') == '24.00 V'
-    assert browser.text('[data-role=voltage-b]') == '23.80 V'
+    assert browser.text('[data-role=mcu]') == '출력 활성'
+    assert browser.text('[data-role=voltage-a]') == '24.00V'
+    assert browser.text('[data-role=voltage-b]') == '23.80V'
     for key, rpm in [('lf', '100'), ('rf', '-100'), ('lr', '-80'), ('rr', '80')]:
         assert browser.text(f'[data-wheel={key}] [data-field=rpm]') == rpm
-        assert browser.text(f'[data-wheel={key}] [data-field=current]') == '12.3'
-        assert browser.text(f'[data-wheel={key}] [data-field=output]') == '-500'
+        sign = '-' if rpm.startswith('-') else ''
+        assert browser.text(f'[data-wheel={key}] [data-field=count]') == sign + '32,768'
+        assert browser.text(f'[data-wheel={key}] [data-field=revolutions]') == sign + '2.0000'
+        assert browser.text(f'[data-wheel={key}] [data-field=distance]') == sign + '0.817'
         assert browser.text(f'[data-wheel={key}] [data-field=state]') == '모터 정상'
     assert browser.js('controlSocket === null')
     assert browser.js('window.__statusSockets.every(socket => socket.url.endsWith("/ws/status"))')
@@ -167,7 +169,7 @@ def test_all_bit_mappings_and_fault_semantics(page):
     shared['status']['system_error'] = 4 | 4096
     shared['status']['wheels']['rf']['status'] = 0xA0
     browser.wait('document.querySelector("[data-role=errors]").textContent.includes("CAN_TX_FAILURE")')
-    assert browser.text('[data-role=mcu]') == '출력 허용'
+    assert browser.text('[data-role=mcu]') == '출력 활성'
     assert '예약 비트' in browser.text('[data-role=errors]')
     assert 'BC_INITIALIZATION_FAILURE' not in browser.text('#motor-dashboard')
     browser.wait('document.querySelector("[data-wheel=rf] [data-field=state]").textContent === "모터 오류"')
@@ -194,7 +196,7 @@ def test_invalid_and_stale_values_never_look_live(page):
     browser.wait('document.querySelector("[data-wheel=lf] [data-field=state]").textContent === "모터 정상"')
     shared['fail'] = True
     browser.wait('document.querySelector("[data-role=connection]").textContent === "서버 연결 끊김"')
-    assert browser.text('[data-wheel=rf] [data-field=output]') == '—'
+    assert browser.text('[data-wheel=rf] [data-field=distance]') == '—'
 
 
 def test_legacy_unknown_and_unreceived_states(page):
@@ -205,7 +207,7 @@ def test_legacy_unknown_and_unreceived_states(page):
     assert 'OVER_CURRENT' in browser.text('[data-role=errors]')
     assert browser.text('[data-wheel=lf] [data-field=state]') == '구형 메시지 · 정보 없음'
     assert '23.80 V' in browser.text('[data-role=notice]')
-    shared['status'] = {'version': 2, 'state': 1, 'system_error': 0}
+    shared['status'] = {'version': 1, 'state': 1, 'system_error': 0}
     browser.wait('document.querySelector("[data-role=connection]").textContent === "지원하지 않는 상태 형식"')
     shared['status'] = None
     browser.wait('document.querySelector("[data-role=connection]").textContent === "상태 수신 대기"')
@@ -225,6 +227,7 @@ def test_untrusted_content_is_text_and_mobile_layout(page):
     shared['status']['state'] = 4
     shared['status']['wheels']['rf']['status'] = 0x28
     browser.wait('document.querySelector("[data-role=mcu]").textContent === "시스템 고장"')
+    browser.js('document.querySelector(".vehicle-details").open = true')
     for width, height, name in [(1440, 1200, 'desktop'), (390, 844, 'mobile')]:
         browser.call('Emulation.setDeviceMetricsOverride', {'width': width, 'height': height, 'deviceScaleFactor': 1, 'mobile': width < 500})
         assert browser.js('document.documentElement.scrollWidth <= window.innerWidth')
@@ -240,11 +243,11 @@ def test_client_age_watchdog_and_invalid_schema(page):
       const ui = MotorStatusUI.mount(root);
       ui.accept({{motor_status: {status}, motor_status_age_sec: 0}});
       ui.render(performance.now() + 2000);
-      return {{label: root.querySelector('[data-role=connection]').textContent,
+      return {{label: [...document.querySelectorAll('[data-role=connection]')].at(-1).textContent,
         values: [...root.querySelectorAll('.wheel-metrics dd')].map(node => node.textContent)}};
     }})()''')
     assert result['label'] == '상태 갱신 지연'
-    assert result['values'] == ['—'] * 12
+    assert result['values'] == ['—'] * 16
     assert browser.js('MotorStatusUI.decodeBits(-1, MotorStatusUI.SYSTEM_BITS)') is None
     assert browser.js('MotorStatusUI.decodeBits("4", MotorStatusUI.SYSTEM_BITS)') is None
 
@@ -291,3 +294,28 @@ def test_stream_overflow_notice_and_reconnect(page):
     shared['dropped'] = 0
     browser.wait('document.querySelector("[data-role=connection]").textContent === "상태 수신 중"')
     assert browser.js('window.__sentCommands.length === 0')
+
+
+@pytest.mark.parametrize('count', [-2147483648, -16384, 0, 16384, 2147483647])
+def test_count_conversion_boundaries_and_timestamp_wrap(page, count):
+    browser, _ = page
+    status = snapshot()
+    status['snapshot_timestamp_us'] = 0
+    status['wheels']['lf'].update(encoder_count=count, rx_timestamp_us=4294967295)
+    result = browser.js('MotorStatusUI.viewModel(' + json.dumps(status) + ', 0).wheels[0]')
+    assert result['valid'] is True
+    assert float(result['revolutions'].replace(',', '')) == pytest.approx(count / 16384, abs=0.00005)
+    import math
+    assert float(result['distance'].replace(',', '')) == pytest.approx(count / 16384 * math.pi * 0.13, abs=0.0005)
+    assert browser.js('document.querySelectorAll("[data-field=current], [data-field=output], [data-field=age]").length') == 0
+
+
+@pytest.mark.parametrize('field,value', [('encoder_count', 2147483648), ('encoder_count', -2147483649),
+                                        ('encoder_count', 1.5), ('rx_timestamp_us', -1)])
+def test_malformed_wheel_hides_computed_values(page, field, value):
+    browser, _ = page
+    status = snapshot()
+    status['wheels']['lf'][field] = value
+    result = browser.js('MotorStatusUI.viewModel(' + json.dumps(status) + ', 0).wheels[0]')
+    assert result['valid'] is False
+    assert [result[key] for key in ('count', 'revolutions', 'distance')] == ['—'] * 3
