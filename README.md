@@ -66,7 +66,9 @@ flowchart LR
     Lidar[X4-Pro / ydlidar_ros2_driver] -->|/scan| Mapping
 ```
 
-기본 `control` 모드에서 모터 브리지는 50 Hz로 속도 명령을 전송한다. 상태는 System Status v2를 우선 사용하며, 설정에 따라 legacy 상태를 수신할 수 있다. 웹 대시보드는 MCU 상태, 드라이버 전압, 네 바퀴의 RPM·전류·제어 출력·오류를 표시한다. `valid` 플래그와 마지막 수신 경과 시간을 함께 확인하며, 오래된 값은 현재 측정값으로 표시하지 않는다.
+기본 `control` 모드에서 모터 브리지는 50 Hz로 속도 명령을 전송한다. 상태는 System Status v2를 우선 사용하며, 설정에 따라 legacy 상태를 수신할 수 있다. 웹 대시보드는 MCU 상태, 드라이버 전압, 네 바퀴의 RPM·엔코더 카운트·엔코더 추정 회전수·엔코더 추정 거리·오류를 표시한다. `valid` 플래그와 마지막 수신 경과 시간을 함께 확인하며, 오래된 값은 현재 측정값으로 표시하지 않는다.
+
+오류 비트는 발생 횟수가 아닌 잔여 보고 횟수로 관리된다. 새 감지마다 10으로 갱신하고 정상 송신한 `0x82`마다 1씩 차감한다. 출력 차단 여부는 오류 종류와 현재 입력에 따라 다르므로 최종 MCU 상태를 함께 확인한다. 자세한 규칙은 [모터 브리지 문서](src/my_car_motor_bridge/README.md#firmware-error-reporting-rules)를 따른다.
 
 ## 환경 준비 및 빌드
 
@@ -210,7 +212,7 @@ CAMERA_STREAMS=front:ros_image:/front_camera/image_raw,rear:ros_image:/rear_came
   ros2 run my_car_web_monitor web_monitor_node
 ```
 
-카메라 설정은 [`launch/yaml/cameras.yaml`](src/my_car_package/launch/yaml/cameras.yaml)에서 관리한다. 현재 전방은 카메라 인덱스 `0`, 후방은 `1`이며, 두 카메라 모두 센서 모드 `2028:1520`, 출력 해상도 `640×480`, 형식 `RGB888`, 자동 노출을 사용한다. `FrameDurationLimits`는 `[41666, 50000]` µs로 설정되어 약 20~24 FPS 범위에 해당한다. 카메라 인덱스와 센서 모드는 연결한 장비에 맞게 조정한다.
+카메라 설정은 [`launch/yaml/cameras.yaml`](src/my_car_package/launch/yaml/cameras.yaml)에서 관리한다. 현재 전방은 카메라 인덱스 `1`, 후방은 `0`이며, 두 카메라 모두 센서 모드 `2028:1520`, 출력 해상도 `640×480`, 형식 `RGB888`, 자동 노출을 사용한다. `FrameDurationLimits`는 `[41666, 50000]` µs로 설정되어 약 20~24 FPS 범위에 해당한다. 카메라 인덱스와 센서 모드는 연결한 장비에 맞게 조정한다.
 
 ```bash
 ros2 topic hz /front_camera/image_raw
@@ -297,14 +299,16 @@ T265의 `mono8`을 비롯해 `8UC1`, `rgb8`, `bgr8`, `rgba8`, `bgra8`과 JPEG/PN
 | `CAMERA_WIDTH` / `CAMERA_HEIGHT` / `CAMERA_FPS` | `1280` / `720` / `15` | 로컬 영상 크기와 전송 FPS. ROS 영상은 원본 크기 사용 |
 | `CMD_VEL_TOPIC` | `/cmd_vel` | 속도 명령 발행 토픽 |
 | `MOTOR_STATUS_TOPIC` | `/motor_bridge_node/status` | 모터 상태 구독 토픽 |
-| `CONTROL_LINEAR_SPEED` | `1.0` | 선속도 설정 및 제한, m/s |
-| `CONTROL_ANGULAR_SPEED` | `3.0` | 각속도 설정 및 제한, rad/s |
+| `CONTROL_LINEAR_SPEED` | `2.0` | 선속도 슬라이더 최대값 및 명령 제한, m/s |
+| `CONTROL_LINEAR_SPEED_MIN` / `CONTROL_LINEAR_SPEED_DEFAULT` | `0.0` / `0.2` | 선속도 슬라이더 최소값 / 초기값, m/s |
+| `CONTROL_ANGULAR_SPEED` | `3.0` | 각속도 슬라이더 최대값 및 명령 제한, rad/s |
+| `CONTROL_ANGULAR_SPEED_MIN` / `CONTROL_ANGULAR_SPEED_DEFAULT` | `0.0` / `0.3` | 각속도 슬라이더 최소값 / 초기값, rad/s |
 | `CONTROL_WATCHDOG_TIMEOUT` | `0.3` | 웹 조종 입력 타임아웃, 초 |
 
-예를 들어 속도 설정을 낮춰 실행하려면 다음과 같이 지정한다.
+각 축은 유한한 `0 ≤ 최소값 ≤ 초기값 ≤ 최대값`이어야 한다. 최소값은 슬라이더에 적용되며 정지 명령은 0을 보낸다. 브라우저는 조종 입력 유지 중 10 Hz로 명령을 보낸다. 예를 들어 최대값과 초기값을 따로 지정하려면 다음과 같이 실행한다.
 
 ```bash
-CAMERA_SOURCE=synthetic CONTROL_LINEAR_SPEED=0.3 CONTROL_ANGULAR_SPEED=1.0 \
+CAMERA_SOURCE=synthetic CONTROL_LINEAR_SPEED=0.3 CONTROL_LINEAR_SPEED_DEFAULT=0.2 CONTROL_ANGULAR_SPEED=1.0 CONTROL_ANGULAR_SPEED_DEFAULT=0.3 \
   ros2 run my_car_web_monitor web_monitor_node
 ```
 

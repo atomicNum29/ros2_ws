@@ -1,6 +1,6 @@
 # my_car_web_monitor
 
-ROS2 package plan for a browser-based vehicle monitoring and control interface.
+ROS2 browser-based vehicle monitoring and control interface. The architecture/background sections describe its origins; the runtime configuration below describes the current implementation.
 
 이 패키지는 `tmp/web_streaming2`의 FastAPI/WebRTC 기반 카메라 스트리밍 실험을 ROS2 패키지 형태로 정리하고, `src/my_car_motor_bridge/my_car_motor_bridge`의 모터 브리지 노드와 ROS 토픽으로 상호작용하는 웹 모니터링/제어 UI를 제공하는 것을 목표로 한다.
 
@@ -30,7 +30,7 @@ ROS2 package plan for a browser-based vehicle monitoring and control interface.
   - camera monitor
   - stream selector
   - keyboard/button teleoperation
-  - emergency stop
+  - zero-velocity Stop (not an MCU emergency-stop command)
         |
         | HTTP/WebSocket + WebRTC
         v
@@ -119,9 +119,9 @@ The process will own both:
 
 This keeps deployment simple on Raspberry Pi. If executor/web-loop integration becomes unstable, the ROS2 node can later be split into a separate process and connected to the web app through ROS topics or an internal queue.
 
-## Configuration Draft
+## Runtime configuration
 
-Expected ROS parameters or environment-backed settings:
+Settings are read from environment variables at process startup, not ROS parameters:
 
 - `host`: web bind host, default `0.0.0.0`
 - `port`: web port, default `8443`
@@ -132,16 +132,15 @@ Expected ROS parameters or environment-backed settings:
 - `camera_streams`: stream list such as `front:picamera2:0,debug:ros_image:/camera/image_raw`
 - `cmd_vel_topic`: default `/cmd_vel`
 - `motor_status_topic`: default `/motor_bridge_node/status`
-- `CONTROL_LINEAR_SPEED`: linear speed maximum, default `1.0` m/s
+- `CONTROL_LINEAR_SPEED`: linear speed maximum, default `2.0` m/s
 - `CONTROL_LINEAR_SPEED_MIN`: linear slider minimum, default `0.0` m/s
-- `CONTROL_LINEAR_SPEED_DEFAULT`: initial linear speed, default `0.3` m/s
+- `CONTROL_LINEAR_SPEED_DEFAULT`: initial linear speed, default `0.2` m/s
 - `CONTROL_ANGULAR_SPEED`: angular speed maximum, default `3.0` rad/s
 - `CONTROL_ANGULAR_SPEED_MIN`: angular slider minimum, default `0.0` rad/s
-- `CONTROL_ANGULAR_SPEED_DEFAULT`: initial angular speed, default `1.0` rad/s
+- `CONTROL_ANGULAR_SPEED_DEFAULT`: initial angular speed, default `0.3` rad/s
 
 Each axis requires finite `0 <= minimum <= default <= maximum`; invalid settings fail at startup. The existing `CONTROL_*_SPEED` variables remain the maximum and server command limit. Minimums apply to slider selection; stop commands still send zero and reverse commands retain their sign.
-- `control_publish_rate_hz`: default `20.0`
-- `control_watchdog_timeout_sec`: default `0.3`
+Browser command repetition is fixed at 100 ms (10 Hz); there is no `control_publish_rate_hz` setting. `CONTROL_WATCHDOG_TIMEOUT` sets the server input timeout (default `0.3` seconds).
 
 ## Runtime Dependencies
 
@@ -185,7 +184,7 @@ Raspberry Pi Camera direct mode also needs Picamera2 from the Raspberry Pi OS/sy
 - Keep video transport and vehicle control transport logically separate.
 - Prefer WebRTC for low-latency browser video.
 - Keep `/cmd_vel` as the main integration point with `my_car_motor_bridge`.
-- Treat emergency stop and disconnect handling as first-class behavior, not UI extras.
+- The Stop button and disconnect handling publish zero velocity; they do not set the MCU emergency-stop flag.
 - Start with one operator and one vehicle.
 - Do not expose the service publicly by default; assume local network or Tailscale access.
 
@@ -241,7 +240,7 @@ CAMERA_STREAMS=front:picamera2:0,left:ros_image:/camera/fisheye1/image_raw \
 
 Compressed streams require an existing compressed-image publisher. The web node does not create an image_transport republisher. Raw encodings supported are `mono8` (T265 Fisheye), `8UC1`, `rgb8`, `bgr8`, `rgba8`, and `bgra8`. Row padding is respected and grayscale is converted to RGB for the existing WebRTC track. Compressed JPEG/PNG images are supported; depth images, compressedDepth and other raw encodings are rejected with throttled warnings. A malformed image is skipped and a later valid image resumes streaming.
 
-ROS sources implement the same `FrameSource.start/stop/read` interface as direct cameras. The registry passes the existing ROS node to each source. The first viewer creates the subscription; the last viewer disconnecting or server shutdown destroys it. Restarting waits for a new image, and callbacks from a retired subscription are ignored. `/streams` exposes the topic as `device`, so the existing UI displays it without special camera controls.
+ROS sources implement the same `FrameSource.start/stop/read` interface as direct cameras. The registry passes the existing ROS node to each source. The first viewer creates the subscription; the last viewer disconnecting or server shutdown destroys it. Restarting waits for a new image, and callbacks from a retired subscription are ignored. `/streams` exposes the topic as `device` for API consumers; camera cards omit source types and topic names.
 
 Subscriptions use best-effort, volatile, keep-last depth 1 QoS. The ROS callback stores only the latest message under a thread lock; it does not decode images or enqueue work into the web event loop. Each viewer samples the latest image independently at `CAMERA_FPS`, and decoded pixels are cached across viewers. Faster incoming images are dropped between samples, rather than building a delayed playback queue. `CAMERA_WIDTH` and `CAMERA_HEIGHT` do not resize ROS images: the published resolution is preserved. WebRTC timestamps follow the output FPS, not the ROS header clock, so bag replay clock changes do not rewind video timestamps.
 
@@ -275,7 +274,7 @@ A thin top status bar shows vehicle state, Driver A/B voltage, status freshness,
 
 ## Vehicle status dashboard
 
-- MCU state and Driver A/B voltage appear above the four motor cards. Voltage is shown in V and current in A; RPM and controller output keep their signs.
+- MCU state and Driver A/B voltage appear above the four motor cards. Voltage is shown in V. Motor cards show RPM, raw encoder count, 엔코더 추정 회전수 and 엔코더 추정 거리 (m); signed values retain their signs. Current and controller output are absent from wire version 2.
 - System Status v2 and legacy errors have separate mappings. CAN_TX_FAILURE alone does not turn the displayed MCU state into FAULT. Reserved bits (including bit 12) are labelled as reserved.
 - Each motor decodes ALARM, CTRL_FAIL, OVER_VOLT, OVER_TEMP, OVER_LOAD, HALL_FAIL, INV_VEL and STALL. Multiple active errors appear together; hover over a motor error for its bit/mask and explanation.
 - A read-only `/ws/status` WebSocket starts automatically. Each ROS status callback is forwarded as its own immutable message in arrival order; there is no timer sampling of the latest value. It does not open the control WebSocket or send velocity commands, so multiple spectators can monitor without taking the control session. `/control/status` remains a latest-snapshot debugging API.
@@ -316,3 +315,9 @@ To avoid aiortc/RTP internals or unreliable out-of-band frame pairing, the encod
 A read-only, uncached `/time` endpoint provides server receive/send monotonic milliseconds. The browser samples five short HTTP round trips on connection and every ten seconds while videos are active, retaining the lowest-RTT sample younger than 30 seconds. It estimates clock offset using the round-trip midpoint. Asymmetric paths introduce uncertainty (roughly up to half the residual round trip, apart from timestamp/scheduling errors); this is described in the value's tooltip. `requestVideoFrameCallback().expectedDisplayTime` supplies the estimated display endpoint. Unsupported browsers, stale displayed frames (1.5 seconds), expired clock samples and invalid time codes show `—`. Clock samples are discarded across visibility changes. No test execution is implied by this implementation; validation must be requested separately.
 
 References: [Picamera2 manual](https://datasheets.raspberrypi.com/camera/picamera2-manual.pdf), [sensor timestamp/exposure clarification](https://github.com/raspberrypi/picamera2/issues/821), [video frame callback metadata](https://wicg.github.io/video-rvfc/).
+
+## Firmware error semantics and UI limitation
+
+Current firmware error management is documented in [the motor bridge error rules](../my_car_motor_bridge/README.md#firmware-error-reporting-rules). Each detection refreshes 10 remaining reports; only successful canonical `0x82` sends decrement them. These are neither occurrence counters nor reboot-only latches. Bit 9 is `DRIVER_RX_TIMEOUT` for an incomplete PID196/201 pair within 3 ms. Voltage stale is diagnostic-only. Drive/safety TX, driver-status, response-timeout and low-voltage faults block output while their reports remain. E-stop/command timeout use current inputs for stopping; historical report bits alone do not prolong those states.
+
+The current `motor-status.js` still labels bit 9 `MAIN_DATA_STALE` and describes 500 ms and reboot-only persistence for some faults. Those UI explanations are outdated; use the firmware rules above and final MCU state. This documentation update does not change the UI implementation.

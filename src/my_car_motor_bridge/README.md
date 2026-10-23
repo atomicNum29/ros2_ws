@@ -109,7 +109,35 @@ Validity bits 0–3 correspond to LF/RF/LR/RR; bits 4–5 to A/B voltage. The MC
 
 No representative battery field is added to v2. Consumers needing one must use min(A, B) only while both voltages are valid, and otherwise mark it invalid.
 
-MCU states: 0 DISABLED, 1 ENABLED, 2 TIMEOUT_STOP, 3 ESTOP, 4 FAULT, 5 BOOTING, 6 CALIBRATION. `system_error != 0` does not imply FAULT. Bit 2 CAN_TX_FAILURE can indicate a sticky drive/safety TX fault or a recoverable telemetry polling failure. The node preserves the MCU's final state rather than inferring a fault from this bit. Bit 12 is reserved, not BC_INITIALIZATION_FAILURE. Wheel raw status and system_error are separate fields; legacy error bit definitions must not be applied to system_error.
+MCU states: 0 DISABLED, 1 ENABLED, 2 TIMEOUT_STOP, 3 ESTOP, 4 FAULT, 5 BOOTING, 6 CALIBRATION. `system_error != 0` does not imply FAULT. Bit 2 CAN_TX_FAILURE can indicate a drive/safety TX fault with remaining reports or a diagnostic-only voltage request TX failure. The node preserves the MCU's final state rather than inferring a fault from this bit. Bit 12 is reserved, not BC_INITIALIZATION_FAILURE. Wheel raw status and system_error are separate fields; legacy error bit definitions must not be applied to system_error.
+
+### Firmware error reporting rules
+
+The bridge forwards `system_error`, wheel raw status, validity and final MCU state without maintaining or clearing error counters itself. Current Wheel-Dragoon firmware uses remaining report counts, not reboot-only boolean latches:
+
+- A detection sets that error's remaining reports to 10; another detection resets it to 10.
+- Each successfully sent canonical `0x82` includes bits whose counts are positive, then decrements them once. Without another detection, the first 10 packets report the error and the 11th clears it. Counts never go below zero.
+- No decrement occurs for USB space shortages, status inspection, legacy `0x81`, bridge or benchmark packets. BRIDGE mode pauses `0x82`, preserving the counts. Session changes and successful voltage requests do not clear them.
+- Current command timeout, E-stop and voltage stale conditions repeatedly refresh their counts. Fresh low voltage refreshes the low-voltage count; new faulty driver responses refresh driver-status reports; TX failures, response timeouts and overruns refresh on detection.
+- Counts represent remaining reports, not occurrence totals or elapsed time. Ten reports take approximately 100 ms only while canonical packets are sent at 100 Hz.
+
+| Bit | Name | Detection / effect |
+| --- | --- | --- |
+| 0 | SERIAL_CHECKSUM_ERROR | Received checksum mismatch; diagnostic |
+| 1 | COMMAND_TIMEOUT | No valid AUTO command for over 500 ms; current condition gives TIMEOUT_STOP |
+| 2 | CAN_TX_FAILURE | CAN initialization or TX failure; drive/safety failure blocks output while its reports remain; voltage request failure is diagnostic-only |
+| 3 | EMERGENCY_STOP_ACTIVE | Current E-stop input gives ESTOP |
+| 4 | BATTERY_LOW | Both voltages fresh and either below 21,000 mV; blocks output while reports remain |
+| 5 | SERIAL_FRAMING_ERROR | Invalid header/length/type; diagnostic |
+| 6 | COMMAND_OUT_OF_RANGE | Invalid command range; command rejected |
+| 7 | WATCHDOG_RESET_DETECTED | Detection source not implemented; currently zero |
+| 8 | DRIVER_STATUS_FAULT_PRESENT | A valid wheel response has nonzero raw status; blocks output while reports remain |
+| 9 | DRIVER_RX_TIMEOUT | PID196/201 response pair incomplete within 3 ms of the driver command; blocks output while reports remain |
+| 10 | VOLTAGE_STALE | A voltage is invalid after the initial 3 s CONTROL grace period; diagnostic and validity reporting |
+| 11 | CAN_RX_OVERRUN | Detected RX mailbox overrun; diagnostic |
+| 12–15 | Reserved | Currently zero |
+
+Drive/safety TX failure, driver-status fault, driver RX timeout and low voltage keep FAULT/TQ-OFF active while their counts remain. Expiry removes that fault's block; current enable, E-stop, timeout and other faults then determine output permission, with no additional recovery handshake. E-stop and command-timeout report bits may remain after their inputs clear, but historical reports alone do not extend ESTOP/TIMEOUT_STOP. Active inputs continue to stop output regardless of report countdown. Wheel raw status bytes are not cleared or rewritten by these counters.
 
 ### Legacy fallback
 
@@ -202,4 +230,4 @@ colcon test-result --verbose
 
 Hardware verification remains separate: wheel direction/polarity and diagonal mapping, actual voltage units, polling response rate/freshness, disconnect recovery, and MCU BRIDGE/CONTROL transitions require the real vehicle. These are not established by the software tests.
 
-Source protocol references: Wheel-Dragoon `README.md` and `agent/ros2_update_report.md`. ROS implementation plan: `agent/plan/ros2_motor_bridge_update_plan.md` in the workspace root.
+Source protocol references: Wheel-Dragoon `README.md` and `src/main.cpp` in the sibling repository (the former `agent/ros2_update_report.md` was removed). ROS implementation plan: `agent/plan/ros2_motor_bridge_update_plan.md` in the workspace root.
