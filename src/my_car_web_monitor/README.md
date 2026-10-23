@@ -316,8 +316,8 @@ A read-only, uncached `/time` endpoint provides server receive/send monotonic mi
 
 References: [Picamera2 manual](https://datasheets.raspberrypi.com/camera/picamera2-manual.pdf), [sensor timestamp/exposure clarification](https://github.com/raspberrypi/picamera2/issues/821), [video frame callback metadata](https://wicg.github.io/video-rvfc/).
 
-## Firmware error semantics and UI limitation
+## Firmware error semantics
 
 Current firmware error management is documented in [the motor bridge error rules](../my_car_motor_bridge/README.md#firmware-error-reporting-rules). Each detection refreshes 10 remaining reports; only successful canonical `0x82` sends decrement them. These are neither occurrence counters nor reboot-only latches. Bit 9 is `DRIVER_RX_TIMEOUT` for an incomplete PID196/201 pair within 3 ms. Voltage stale is diagnostic-only. Drive/safety TX, driver-status, response-timeout and low-voltage faults block output while their reports remain. E-stop/command timeout use current inputs for stopping; historical report bits alone do not prolong those states.
 
-The current `motor-status.js` still labels bit 9 `MAIN_DATA_STALE` and describes 500 ms and reboot-only persistence for some faults. Those UI explanations are outdated; use the firmware rules above and final MCU state. This documentation update does not change the UI implementation.
+The UI labels bit 9 `DRIVER_RX_TIMEOUT` and explains its 3 ms response window. System diagnostics describe the remaining-report rule, distinguish current stop inputs from historical report bits, and distinguish diagnostic-only voltage failures from faults that block output. The browser displays received bits and final MCU state; it does not simulate firmware counters or clear errors locally.

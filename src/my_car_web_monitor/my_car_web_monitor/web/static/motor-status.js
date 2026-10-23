@@ -13,16 +13,16 @@
   // [wire code, operator label, explanation, presentation severity]
   const SYSTEM_BITS = [
     ["SERIAL_CHECKSUM_ERROR", "시리얼 체크섬 오류", "수신 패킷의 체크섬이 일치하지 않습니다. 진단 이벤트입니다.", "warn"],
-    ["COMMAND_TIMEOUT", "주행 명령 시간 초과", "AUTO 모드에서 정상 명령이 500 ms 넘게 수신되지 않았습니다.", "warn"],
-    ["CAN_TX_FAILURE", "CAN 송신 실패", "구동·안전 명령 실패 또는 일시적인 telemetry 요청 실패입니다. 이 비트만으로 고장을 단정할 수 없으며 MCU 상태를 함께 확인하세요.", "warn"],
-    ["EMERGENCY_STOP_ACTIVE", "비상 정지 활성", "명령의 emergency stop 플래그가 활성화되어 있습니다.", "bad"],
-    ["BATTERY_LOW", "배터리 저전압", "두 전압이 유효할 때 하나 이상이 21.0 V 미만으로 감지되었습니다. MCU 재부팅 전까지 유지됩니다.", "bad"],
+    ["COMMAND_TIMEOUT", "주행 명령 시간 초과", "AUTO 모드에서 정상 명령이 500 ms 넘게 수신되지 않았습니다. 현재 timeout 조건 동안 TIMEOUT_STOP으로 출력을 금지합니다. 조건 해제 뒤 남은 보고 비트만으로 정지를 연장하지 않습니다.", "warn"],
+    ["CAN_TX_FAILURE", "CAN 송신 실패", "CAN 초기화 또는 송신 실패입니다. 구동·안전 송신 실패는 잔여 보고 동안 FAULT와 출력 차단을 유지하며, 전압 조회 송신 실패는 진단 전용입니다. 최종 MCU 상태를 함께 확인하세요.", "warn"],
+    ["EMERGENCY_STOP_ACTIVE", "비상 정지 활성", "E-stop 입력이 감지되었습니다. 현재 입력이 활성인 동안 ESTOP으로 출력을 금지합니다. 입력 해제 뒤 남은 보고 비트만으로 ESTOP을 연장하지 않습니다.", "bad"],
+    ["BATTERY_LOW", "배터리 저전압", "두 전압이 유효할 때 하나 이상이 21.0 V 미만으로 감지되었습니다. 유효한 저전압 조건에서 보고 횟수를 갱신하며 잔여 보고 동안 FAULT와 TQ-OFF를 유지합니다.", "bad"],
     ["SERIAL_FRAMING_ERROR", "시리얼 프레임 오류", "패킷 헤더·길이·종류가 올바르지 않습니다. 진단 이벤트입니다.", "warn"],
     ["COMMAND_OUT_OF_RANGE", "속도 명령 범위 초과", "허용 범위를 벗어난 속도 명령을 MCU가 거부했습니다.", "warn"],
     ["WATCHDOG_RESET_DETECTED", "워치독 리셋 감지", "워치독 리셋 진단 비트입니다. 현재 MCU의 감지 source는 미구현입니다.", "warn"],
-    ["DRIVER_STATUS_FAULT_PRESENT", "모터 드라이버 오류 감지", "하나 이상의 모터에서 오류 비트가 감지되었습니다. 모터별 상태를 확인하세요. MCU 재부팅 전까지 유지됩니다.", "bad"],
-    ["MAIN_DATA_STALE", "모터 telemetry 시간 초과", "초기 대기 이후 하나 이상의 모터 정보가 500 ms 넘게 갱신되지 않았습니다. MCU 재부팅 전까지 유지됩니다.", "bad"],
-    ["VOLTAGE_STALE", "드라이버 전압 시간 초과", "초기 대기 이후 전압이 3 s 넘게 갱신되지 않았습니다. 두 전압이 다시 유효해지면 해제됩니다.", "warn"],
+    ["DRIVER_STATUS_FAULT_PRESENT", "모터 드라이버 오류 감지", "정상 수신된 모터 응답의 raw status가 0이 아닙니다. 새 오류 응답마다 보고 횟수를 갱신하며 잔여 보고 동안 FAULT와 TQ-OFF를 유지합니다. 모터별 상태를 확인하세요.", "bad"],
+    ["DRIVER_RX_TIMEOUT", "드라이버 응답 시간 초과", "드라이버 명령 후 3 ms 안에 PID196/201 응답 쌍이 모두 수신되지 않았습니다. 누락 바퀴의 validity가 해제되며 잔여 보고 동안 FAULT와 TQ-OFF를 유지합니다.", "bad"],
+    ["VOLTAGE_STALE", "드라이버 전압 시간 초과", "CONTROL 시작 후 3 s 대기 기간이 지났고 하나 이상의 전압이 유효하지 않습니다. 현재 조건 동안 보고 횟수를 갱신합니다. 진단 및 전압 validity 보고이며 이 오류만으로 출력을 차단하지 않습니다.", "warn"],
     ["CAN_RX_OVERRUN", "CAN 수신 버퍼 초과", "CAN 수신 mailbox에서 overrun이 감지되었습니다. 즉시 정지를 뜻하지 않는 진단 비트입니다.", "warn"],
   ];
   const LEGACY_BITS = [
@@ -215,7 +215,7 @@
         const active = view.errors?.filter(bit => bit.active) || [];
         refs["error-count"].textContent = view.errors ? `${view.fresh ? "" : "마지막 "}${active.length}개 비트` : "확인 불가";
         tone(refs["error-count"], !view.fresh || !view.errors ? "neutral" : active.length ? "warn" : "ok");
-        refs["error-context"].textContent = "오류 비트는 원인 정보입니다. 최종 운용 상태는 MCU 상태를 기준으로 확인하세요.";
+        refs["error-context"].textContent = "오류 감지마다 잔여 보고를 10회로 갱신하고 정상 0x82 송신 후 1회씩 차감합니다. 재감지가 없으면 11번째부터 해제됩니다. 미송신·BRIDGE에서는 차감하지 않으며 발생 횟수나 고정 시간이 아닙니다. 출력 차단은 오류 종류와 현재 입력에 따라 다릅니다. 최종 MCU 상태를 확인하세요.";
         refs.errors.replaceChildren();
         for (const bit of active) {
           const item = element("li", "error-item");

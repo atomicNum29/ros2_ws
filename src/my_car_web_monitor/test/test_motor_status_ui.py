@@ -162,7 +162,7 @@ def test_all_bit_mappings_and_fault_semantics(page):
     assert codes == ['SERIAL_CHECKSUM_ERROR', 'COMMAND_TIMEOUT', 'CAN_TX_FAILURE',
                      'EMERGENCY_STOP_ACTIVE', 'BATTERY_LOW', 'SERIAL_FRAMING_ERROR',
                      'COMMAND_OUT_OF_RANGE', 'WATCHDOG_RESET_DETECTED',
-                     'DRIVER_STATUS_FAULT_PRESENT', 'MAIN_DATA_STALE', 'VOLTAGE_STALE',
+                     'DRIVER_STATUS_FAULT_PRESENT', 'DRIVER_RX_TIMEOUT', 'VOLTAGE_STALE',
                      'CAN_RX_OVERRUN', 'RESERVED', 'RESERVED', 'RESERVED', 'RESERVED']
     assert browser.js('MotorStatusUI.decodeBits(255, MotorStatusUI.MOTOR_BITS, 8).map(x => x.code)') == [
         'ALARM', 'CTRL_FAIL', 'OVER_VOLT', 'OVER_TEMP', 'OVER_LOAD', 'HALL_FAIL', 'INV_VEL', 'STALL']
@@ -325,3 +325,21 @@ def test_speed_slider_range_and_initial_value_are_independent(page):
     browser, _ = page
     browser.wait('document.getElementById("linear-speed").min === "0.1"')
     assert browser.js('["linear-speed", "angular-speed"].map(id => {const x = document.getElementById(id); return [x.min, x.max, x.value];})') == [['0.1', '1', '0.3'], ['0.2', '3', '1']]
+
+
+def test_current_firmware_error_reporting_guidance(page):
+    browser, shared = page
+    shared['status']['system_error'] = 0x071E
+    browser.wait('document.querySelector("[data-role=errors]").textContent.includes("DRIVER_RX_TIMEOUT")')
+    details = browser.text('[data-role=errors]')
+    assert '3 ms' in details and 'PID196/201' in details
+    assert '재부팅 전까지' not in details
+    assert '전압 조회 송신 실패는 진단 전용' in details
+    assert '남은 보고 비트만으로' in details
+    assert '이 오류만으로 출력을 차단하지 않습니다' in details
+    context = browser.text('[data-role=error-context]')
+    assert '10회' in context and '11번째' in context and 'BRIDGE' in context
+    assert '발생 횟수나 고정 시간이 아닙니다' in context
+    assert browser.text('[data-role=mcu]') == '출력 활성'
+    shared['status']['system_error'] = 0
+    browser.wait('document.querySelector("[data-role=errors]").textContent.includes("활성 오류 비트가 없습니다")')

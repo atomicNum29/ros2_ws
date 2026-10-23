@@ -34,7 +34,8 @@ def test_invalid_slider_configuration_rejected(axis, minimum, default, maximum):
 
 def test_minimum_does_not_block_stop_or_reverse():
     node = Mock()
-    bridge = RosControlBridge(node, Settings(control_linear_speed_min=0.1,
+    bridge = RosControlBridge(node, Settings(control_linear_speed=1.0, control_angular_speed=3.0,
+                                            control_linear_speed_min=0.1,
                                             control_angular_speed_min=0.2))
     asyncio.run(bridge.send_command(-5, -5))
     message = node.create_publisher.return_value.publish.call_args.args[0]

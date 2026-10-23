@@ -3,7 +3,7 @@
 > **과거 작업 기록 — 현행 명세 아님 (2026-10-23 확인)**
 > 아래 계획·구현 설명과 테스트 결과는 당시 기준으로 보존한다. 현재 `0x82`는 wire version 2, payload 59/전체 63바이트이며 전류·제어출력 대신 encoder_count(int32), rx_timestamp_us(uint32), snapshot_timestamp_us(uint32)를 전달한다. 과거의 version 1/43바이트/signed controller_output 테스트 결과를 현행 코드의 검증 결과로 해석하지 않는다.
 > 오류는 재부팅까지 유지되는 latch가 아니라 감지마다 갱신하는 잔여 보고 횟수 10으로 관리한다. 정상 canonical `0x82` 송신 후에만 차감하며 재감지가 없으면 11번째부터 해제된다. Bit 9는 MAIN_DATA_STALE/500 ms가 아니라 DRIVER_RX_TIMEOUT/명령 후 3 ms 응답 쌍 미완성이다. 출력 차단은 오류 종류와 현재 입력을 구분한다.
-> 현행 구조·오류별 영향은 [모터 브리지 README](../src/my_car_motor_bridge/README.md#firmware-error-reporting-rules), 웹 표시·설정과 남아 있는 UI 오류 설명의 제한은 [웹 README](../src/my_car_web_monitor/README.md)를 따른다. 웹은 엔코더 기반 추정 회전수·거리를 표시하며 전류·제어출력은 표시하지 않는다.
+> 현행 구조·오류별 영향은 [모터 브리지 README](../src/my_car_motor_bridge/README.md#firmware-error-reporting-rules), 웹 표시·설정 및 최신 오류 안내는 [웹 README](../src/my_car_web_monitor/README.md)를 따른다. 웹은 엔코더 기반 추정 회전수·거리를 표시하며 전류·제어출력은 표시하지 않는다.
 
 
 작성일: 2026-09-07
